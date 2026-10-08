@@ -38,7 +38,16 @@ const sections: { id: SettingsTab; label: string; icon: React.ComponentType<{ cl
 ];
 
 /** 整页设置: 左侧分区导航, 右侧内容独立滚动, 底部保存条固定。 */
-export function SettingsPage({ initialTab = "apps", onClose, onSaved }: { initialTab?: SettingsTab; onClose: () => void; onSaved: () => void }) {
+export function SettingsPage({
+  initialTab = "apps",
+  onClose,
+  onSaved,
+}: {
+  initialTab?: SettingsTab;
+  onClose: () => void;
+  /** syncing 为 true 表示改了同步仓库或认证, 后端已安排一次同步。 */
+  onSaved: (syncing: boolean) => void;
+}) {
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [view, setView] = useState<SettingsView | null>(null);
   const [form, setForm] = useState<Settings | null>(null);
@@ -67,10 +76,16 @@ export function SettingsPage({ initialTab = "apps", onClose, onSaved }: { initia
     setBusy(true);
     try {
       await api.SaveSettings(form);
-      if (gitSecret.trim() || clearGitSecret) await api.SetGitSecret(clearGitSecret ? "" : gitSecret);
+      const secretChanged = !!gitSecret.trim() || clearGitSecret;
+      if (secretChanged) await api.SetGitSecret(clearGitSecret ? "" : gitSecret);
       setMcp(await api.GetMCPConfig());
-      toast.success("设置已保存");
-      onSaved();
+      // 与后端 SaveSettings / SetGitSecret 的触发条件一致: 填了仓库地址且仓库、用户名或密钥有变化。
+      const prev = view?.settings;
+      const syncing =
+        !!form.gitRemote &&
+        (form.gitRemote !== prev?.gitRemote || form.gitUsername !== prev?.gitUsername || secretChanged);
+      toast.success(syncing ? "设置已保存, 正在同步仓库…" : "设置已保存");
+      onSaved(syncing);
       onClose();
     } catch (e) {
       toast.error(errorText(e));

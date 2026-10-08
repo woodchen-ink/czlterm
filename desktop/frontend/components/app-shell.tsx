@@ -65,6 +65,10 @@ function Shell() {
   const [syncEnabled, setSyncEnabled] = useState(false);
   // 坏文件告警只在内容变化时提示一次, 不随每次刷新重复弹出。
   const lastWarnings = useRef("");
+  // 手动同步自己弹结果, 同步状态事件里不再重复提示。
+  const manualSync = useRef(false);
+  // 保存同步设置后安排的那次同步, 成功时也要告诉用户。
+  const announceSync = useRef(false);
 
   const reload = useCallback(async () => {
     try {
@@ -94,8 +98,15 @@ function Shell() {
     api.GetSyncStatus().then(setSync).catch(() => {});
     const offSync = onEvent<SyncStatus>(Events.syncStatus, (s) => {
       setSync(s);
+      if (s.running) return;
       // 同步可能拉来了别的设备上的改动。
-      if (!s.running) void reload();
+      void reload();
+      if (!manualSync.current) {
+        // 后台同步 (自动同步、保存设置后) 失败一律提示, 不能只藏在按钮的悬停说明里。
+        if (s.error) toast.error(`同步失败: ${errorText(s.error)}`);
+        else if (announceSync.current) toast.success("仓库同步完成");
+      }
+      announceSync.current = false;
     });
     api
       .GetPendingUpdate()
@@ -174,7 +185,8 @@ function Shell() {
       <SettingsPage
         initialTab={settingsTab}
         onClose={() => setSettingsOpen(false)}
-        onSaved={() => {
+        onSaved={(syncing) => {
+          announceSync.current = syncing;
           loadSettings();
           void reload();
         }}
@@ -185,7 +197,10 @@ function Shell() {
   /** 侧栏同步按钮: 连接配置走 git, 保险库已解锁时顺带从服务器同步条目 (bw sync)。 */
   async function syncNow() {
     const vaultOpen = vaultStatus?.status === "unlocked";
+    manualSync.current = true;
     const [git, vault] = await Promise.allSettled([api.SyncNow(), vaultOpen ? api.VaultRefresh() : Promise.resolve()]);
+    // 同步结束的事件可能晚于返回值到达, 稍等再清标记, 避免同一次结果提示两遍。
+    setTimeout(() => (manualSync.current = false), 500);
     if (git.status === "rejected") toast.error(errorText(git.reason));
     if (vault.status === "rejected") toast.error(`保险库同步失败: ${errorText(vault.reason)}`);
     if (git.status === "fulfilled" && vault.status === "fulfilled") {

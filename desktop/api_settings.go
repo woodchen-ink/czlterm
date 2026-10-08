@@ -42,7 +42,13 @@ func (a *App) GetSettings() (SettingsView, error) {
 
 // SetGitSecret 保存同步密钥 (HTTPS 访问令牌或 SSH 私钥) 到系统密钥库; 传空串则删除, 恢复使用 git 默认认证。
 func (a *App) SetGitSecret(value string) error {
-	return secret.Set(secret.GitKey, strings.TrimSpace(value))
+	if err := secret.Set(secret.GitKey, strings.TrimSpace(value)); err != nil {
+		return err
+	}
+	if a.settings.Get().GitRemote != "" {
+		a.scheduleSync(time.Second)
+	}
+	return nil
 }
 
 // SaveSettings 保存设置并让改动立即生效。
@@ -61,6 +67,11 @@ func (a *App) SaveSettings(in settings.Settings) (settings.Settings, error) {
 		return prev, err
 	}
 	a.vault.Configure(next.BWPath, time.Duration(next.VaultAutoLockMinutes)*time.Minute)
+	// 同步仓库或认证改了就马上同步一次, 让用户立刻知道新配置能不能用。
+	// 前端紧接着会单独保存密钥 (SetGitSecret), 延迟 1 秒合并成一次同步, 用上新密钥。
+	if next.GitRemote != "" && (next.GitRemote != prev.GitRemote || next.GitUsername != prev.GitUsername) {
+		a.scheduleSync(time.Second)
+	}
 	// 「记住解锁」开关: 打开时若已解锁立即保存当前会话, 关闭时删除保存的会话。
 	switch {
 	case next.VaultRemember && !prev.VaultRemember:
@@ -156,10 +167,15 @@ func (a *App) scheduleAutoSync() {
 	if !cfg.GitAutoSync || cfg.GitRemote == "" {
 		return
 	}
+	a.scheduleSync(3 * time.Second)
+}
+
+// scheduleSync 在 d 之后同步一次; 期间再次调用会重新计时, 多个触发点合并成一次同步。
+func (a *App) scheduleSync(d time.Duration) {
 	a.sync.mu.Lock()
 	defer a.sync.mu.Unlock()
 	if a.sync.timer != nil {
 		a.sync.timer.Stop()
 	}
-	a.sync.timer = time.AfterFunc(3*time.Second, func() { _, _ = a.SyncNow() })
+	a.sync.timer = time.AfterFunc(d, func() { _, _ = a.SyncNow() })
 }
