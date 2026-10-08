@@ -1,6 +1,12 @@
 package main
 
 import (
+	"context"
+	"time"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"github.com/woodchen-ink/czlterm/desktop/internal/secret"
 	"github.com/woodchen-ink/czlterm/desktop/internal/vault"
 )
 
@@ -15,7 +21,35 @@ func (a *App) VaultUnlock(password string) error {
 		return err
 	}
 	a.log.Info("vault unlocked")
+	a.rememberVault()
 	return nil
+}
+
+// rememberVault 在开启「记住解锁」时把当前会话密钥存进系统钥匙串。失败只记日志, 不影响本次解锁。
+func (a *App) rememberVault() {
+	if !a.settings.Get().VaultRemember {
+		return
+	}
+	if err := secret.Set(secret.VaultSessionKey, a.vault.Session()); err != nil {
+		a.log.Warn("remember vault session", "err", err)
+	}
+}
+
+// restoreVault 启动时用钥匙串里保存的会话自动解锁。会话失效就删掉, 下次照常输主密码。
+func (a *App) restoreVault() {
+	session, err := secret.Get(secret.VaultSessionKey)
+	if err != nil || session == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := a.vault.Restore(ctx, session); err != nil {
+		a.log.Info("restore vault session", "err", err)
+		_ = secret.Set(secret.VaultSessionKey, "")
+		return
+	}
+	a.log.Info("vault restored from keychain")
+	wruntime.EventsEmit(a.ctx, eventVaultUnlocked)
 }
 
 // VaultLock 锁定保险库并关闭用其凭据建立的 agent 端点与连接。

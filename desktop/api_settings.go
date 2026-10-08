@@ -61,6 +61,13 @@ func (a *App) SaveSettings(in settings.Settings) (settings.Settings, error) {
 		return prev, err
 	}
 	a.vault.Configure(next.BWPath, time.Duration(next.VaultAutoLockMinutes)*time.Minute)
+	// 「记住解锁」开关: 打开时若已解锁立即保存当前会话, 关闭时删除保存的会话。
+	switch {
+	case next.VaultRemember && !prev.VaultRemember:
+		a.rememberVault()
+	case !next.VaultRemember && prev.VaultRemember:
+		_ = secret.Set(secret.VaultSessionKey, "")
+	}
 	if next.MCPEnabled && !prev.MCPEnabled {
 		if err := a.startMCP(); err != nil {
 			return next, err

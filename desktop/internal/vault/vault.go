@@ -183,6 +183,46 @@ func (v *Vault) Unlock(ctx context.Context, password string) error {
 	return nil
 }
 
+// Session 返回当前会话密钥, 未解锁时为空。供「记住解锁」存进系统钥匙串。
+func (v *Vault) Session() string {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.session
+}
+
+// Restore 用之前保存的会话密钥恢复解锁状态。会话已失效 (在别处执行过 bw lock / logout、
+// 换了服务器) 时返回错误, 调用方应丢弃保存的会话。
+func (v *Vault) Restore(ctx context.Context, session string) error {
+	if session == "" {
+		return ErrLocked
+	}
+	v.mu.Lock()
+	path, err := v.resolveLocked()
+	v.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	out, err := v.run(ctx, path, session, nil, "status")
+	if err != nil {
+		return fmt.Errorf("3011 check saved session: %w", err)
+	}
+	var st Status
+	if json.Unmarshal(lastJSON(out), &st) != nil || st.Status != StatusUnlocked {
+		return errors.New("3012 saved session is no longer valid")
+	}
+	items, err := v.loadItems(ctx, path, session)
+	if err != nil {
+		return err
+	}
+	v.mu.Lock()
+	v.session = session
+	v.items = items
+	v.lastUsed = time.Now()
+	v.armTimerLocked()
+	v.mu.Unlock()
+	return nil
+}
+
 // Refresh 从服务器同步并重新加载条目。
 func (v *Vault) Refresh(ctx context.Context) error {
 	v.mu.Lock()

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/woodchen-ink/czlterm/desktop/internal/facts"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/paths"
+	"github.com/woodchen-ink/czlterm/desktop/internal/secret"
 	"github.com/woodchen-ink/czlterm/desktop/internal/settings"
 	"github.com/woodchen-ink/czlterm/desktop/internal/sshx"
 	"github.com/woodchen-ink/czlterm/desktop/internal/vault"
@@ -22,10 +24,11 @@ import (
 
 // 推给前端的事件名。
 const (
-	eventVaultLocked = "vault:locked"
-	eventSyncStatus  = "sync:status"
-	eventEditStatus  = "edit:status"
-	eventFacts       = "facts:updated"
+	eventVaultLocked   = "vault:locked"
+	eventVaultUnlocked = "vault:unlocked"
+	eventSyncStatus    = "sync:status"
+	eventEditStatus    = "edit:status"
+	eventFacts         = "facts:updated"
 )
 
 // App 承载应用生命周期, 方法绑定给前端调用。
@@ -52,6 +55,9 @@ type App struct {
 
 	// initErr 是启动阶段的致命错误 (数据目录不可用), 界面据此显示错误页而不是空列表。
 	initErr error
+
+	// quitting 在退出流程中置位: 退出时也会锁定保险库, 但不该删掉「记住解锁」保存的会话。
+	quitting atomic.Bool
 }
 
 // NewApp 创建 App。重活放在 startup, 以便窗口先出来。
@@ -77,6 +83,9 @@ func (a *App) startup(ctx context.Context) {
 		if err := a.startMCP(); err != nil {
 			a.log.Error("start mcp", "err", err)
 		}
+	}
+	if cfg.VaultRemember {
+		go a.restoreVault()
 	}
 	go a.runUpdateChecks(ctx)
 	a.log.Info("startup done", "version", version, "os", runtime.GOOS)
@@ -117,6 +126,7 @@ func (a *App) init() error {
 
 // shutdown 清理内存里的凭据与本地端点。
 func (a *App) shutdown(context.Context) {
+	a.quitting.Store(true)
 	a.stopMCP()
 	a.edits.stopAll()
 	a.pool.CloseAll()
@@ -129,6 +139,10 @@ func (a *App) shutdown(context.Context) {
 
 // onVaultLocked 在保险库锁定 (手动或自动) 后丢弃所有用保险库凭据建立的东西。
 func (a *App) onVaultLocked() {
+	// 手动锁定与空闲超时都意味着「现在不想保持解锁」, 保存的会话一并作废; 退出程序不算。
+	if !a.quitting.Load() {
+		_ = secret.Set(secret.VaultSessionKey, "")
+	}
 	if a.askpass != nil {
 		a.askpass.RevokeAll()
 	}

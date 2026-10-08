@@ -51,10 +51,16 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       .VaultStatus()
       .then(setStatus)
       .catch(() => {});
-    return onEvent(Events.vaultLocked, () => {
+    const offLocked = onEvent(Events.vaultLocked, () => {
       void refreshStatus();
       toast.info("保险库已锁定");
     });
+    // 「记住解锁」在启动后台恢复会话, 成功时刷新状态。
+    const offUnlocked = onEvent(Events.vaultUnlocked, () => void refreshStatus());
+    return () => {
+      offLocked();
+      offUnlocked();
+    };
   }, [refreshStatus]);
 
   const settle = useCallback((ok: boolean) => {

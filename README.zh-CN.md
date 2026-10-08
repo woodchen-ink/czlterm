@@ -38,6 +38,8 @@
 
 保险库锁定（手动锁定或空闲超时）或退出程序时，agent 端点、进程内的 SSH 连接和 bw 会话都会被清除。
 
+可以在「设置 → 保险库」里打开「记住解锁」：bw 会话密钥存进系统钥匙串，重启 czlterm 不用再输主密码。手动锁定或空闲超时锁定时会一并删除。
+
 ## 安装
 
 从 [Releases](https://github.com/woodchen-ink/czlterm/releases) 下载：

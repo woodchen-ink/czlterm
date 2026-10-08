@@ -30,6 +30,7 @@ export const api = App;
 /** 后端推送的事件名, 与 app.go 中的常量一致。 */
 export const Events = {
   vaultLocked: "vault:locked",
+  vaultUnlocked: "vault:unlocked",
   syncStatus: "sync:status",
   editStatus: "edit:status",
   updateAvailable: "update:available",

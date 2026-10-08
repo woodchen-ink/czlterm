@@ -202,6 +202,12 @@ export function SettingsPage({ initialTab = "apps", onClose, onSaved }: { initia
                   <Field label="bw 路径" hint="留空时在 PATH 中查找">
                     <Input value={form.bwPath} placeholder="/opt/homebrew/bin/bw" onChange={(e) => set("bwPath", e.target.value)} />
                   </Field>
+                  <ToggleRow
+                    label="记住解锁"
+                    hint="把 bw 会话密钥存进系统钥匙串, 重启 czlterm 不用再输主密码; 手动锁定或空闲超时锁定时会一并清除"
+                    checked={form.vaultRemember}
+                    onChange={(v) => set("vaultRemember", v)}
+                  />
                   <Field label="空闲自动锁定 (分钟)" hint="0 表示直到退出程序">
                     <Input
                       inputMode="numeric"

@@ -15,6 +15,9 @@ import (
 // GitKey 是 git 同步密钥的条目名。
 const GitKey = "git-secret"
 
+// VaultSessionKey 是「记住解锁」保存的 bw 会话密钥。
+const VaultSessionKey = "bw-session"
+
 func service() string {
 	if v := os.Getenv(paths.InstanceEnv); v != "" {
 		return "czlterm-" + v

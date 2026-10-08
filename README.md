@@ -65,6 +65,8 @@ Introduction and discussion (Chinese): [SunAI forum thread](https://www.sunai.ne
 
 Locking the vault (manually or after the idle timeout) or quitting clears the agent endpoints, in-process SSH connections and the bw session.
 
+Optionally turn on "Remember unlock" in Settings → Vault: the bw session key is kept in the system keychain so you don't retype the master password after restarting czlterm. Locking manually or by idle timeout deletes it.
+
 ## MCP
 
 Enable it in Settings → MCP and copy the config snippet:
