@@ -60,10 +60,12 @@ func main() {
 			UniqueId:               paths.InstanceID(),
 			OnSecondInstanceLaunch: func(options.SecondInstanceData) { app.showWindow() },
 		},
-		Menu:       appMenu(),
+		Menu:       appMenu(app),
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
-		Bind:       []any{app},
+		// 点 X / Alt+F4 / 任务栏关闭都只最小化到图标, 退出走 app.quit。
+		OnBeforeClose: app.beforeClose,
+		Bind:          []any{app},
 		Windows: &windows.Options{
 			WebviewUserDataPath: webviewDir,
 		},

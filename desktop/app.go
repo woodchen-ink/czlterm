@@ -58,6 +58,9 @@ type App struct {
 
 	// quitting 在退出流程中置位: 退出时也会锁定保险库, 但不该删掉「记住解锁」保存的会话。
 	quitting atomic.Bool
+
+	// exiting 表示用户明确要退出 (⌘Q / 设置页按钮 / 更新重启), beforeClose 据此放行。
+	exiting atomic.Bool
 }
 
 // NewApp 创建 App。重活放在 startup, 以便窗口先出来。
@@ -152,6 +155,32 @@ func (a *App) onVaultLocked() {
 		wruntime.EventsEmit(a.ctx, eventVaultLocked)
 	}
 }
+
+// beforeClose 拦截窗口关闭: 点 X 时最小化到任务栏 / Dock 而不是退出。
+func (a *App) beforeClose(context.Context) (prevent bool) {
+	if a.exiting.Load() {
+		return false
+	}
+	a.minimise()
+	return true
+}
+
+func (a *App) minimise() {
+	if a.ctx != nil {
+		wruntime.WindowMinimise(a.ctx)
+	}
+}
+
+// quit 真正退出程序。
+func (a *App) quit() {
+	a.exiting.Store(true)
+	if a.ctx != nil {
+		wruntime.Quit(a.ctx)
+	}
+}
+
+// QuitApp 退出程序 (点 X 只会最小化, 所以界面需要一个明确的退出入口)。
+func (a *App) QuitApp() { a.quit() }
 
 func (a *App) showWindow() {
 	if a.ctx == nil {
