@@ -182,13 +182,17 @@ function Shell() {
     );
   }
 
+  /** 侧栏同步按钮: 连接配置走 git, 保险库已解锁时顺带从服务器同步条目 (bw sync)。 */
   async function syncNow() {
-    try {
-      await api.SyncNow();
-      toast.success(syncEnabled ? "同步完成" : "已提交到本地仓库");
-    } catch (e) {
-      toast.error(errorText(e));
+    const vaultOpen = vaultStatus?.status === "unlocked";
+    const [git, vault] = await Promise.allSettled([api.SyncNow(), vaultOpen ? api.VaultRefresh() : Promise.resolve()]);
+    if (git.status === "rejected") toast.error(errorText(git.reason));
+    if (vault.status === "rejected") toast.error(`保险库同步失败: ${errorText(vault.reason)}`);
+    if (git.status === "fulfilled" && vault.status === "fulfilled") {
+      const what = syncEnabled ? "连接配置已同步" : "连接配置已提交到本地仓库";
+      toast.success(vaultOpen ? `${what}, 保险库条目已更新` : what);
     }
+    if (vaultOpen) void reload();
   }
 
   return (

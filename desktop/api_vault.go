@@ -22,7 +22,20 @@ func (a *App) VaultUnlock(password string) error {
 	}
 	a.log.Info("vault unlocked")
 	a.rememberVault()
+	go a.syncVaultQuietly()
 	return nil
+}
+
+// syncVaultQuietly 在后台执行 bw sync 并重新加载条目。
+//
+// bw 解锁只读它本地的缓存, 不会自己去服务器拉新数据; 不同步的话, 在 Bitwarden / Vaultwarden
+// 里新加的条目在 czlterm 里一直搜不到。解锁先用本地缓存立即可用, 同步完成后条目自动更新。
+func (a *App) syncVaultQuietly() {
+	if err := a.vault.Refresh(context.Background()); err != nil {
+		a.log.Warn("vault background sync", "err", err)
+		return
+	}
+	a.log.Info("vault synced")
 }
 
 // rememberVault 在开启「记住解锁」时把当前会话密钥存进系统钥匙串。失败只记日志, 不影响本次解锁。
@@ -50,6 +63,7 @@ func (a *App) restoreVault() {
 	}
 	a.log.Info("vault restored from keychain")
 	wruntime.EventsEmit(a.ctx, eventVaultUnlocked)
+	a.syncVaultQuietly()
 }
 
 // VaultLock 锁定保险库并关闭用其凭据建立的 agent 端点与连接。
@@ -58,9 +72,13 @@ func (a *App) VaultLock() {
 	a.log.Info("vault locked")
 }
 
-// VaultRefresh 从服务器同步条目。
+// VaultRefresh 从服务器同步条目 (bw sync) 并重新加载。
 func (a *App) VaultRefresh() error {
-	return a.vault.Refresh(a.ctx)
+	if err := a.vault.Refresh(a.ctx); err != nil {
+		return err
+	}
+	a.log.Info("vault synced")
+	return nil
 }
 
 // VaultSearch 搜索可用作凭据的条目 (登录条目与 SSH 密钥条目), 只返回摘要。

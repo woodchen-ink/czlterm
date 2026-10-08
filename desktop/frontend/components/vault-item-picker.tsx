@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { KeyRoundIcon, LockKeyholeIcon, XIcon } from "lucide-react";
+import { KeyRoundIcon, LockKeyholeIcon, RefreshCwIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { UnlockCancelled, useVault } from "@/components/vault-provider";
@@ -32,6 +32,22 @@ export function VaultItemPicker({
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<VaultItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  // 从服务器同步后加一, 让列表重新查询。
+  const [reloadKey, setReloadKey] = useState(0);
+
+  async function syncFromServer() {
+    setSyncing(true);
+    try {
+      await withVault(() => api.VaultRefresh());
+      setReloadKey((k) => k + 1);
+      toast.success("已从服务器同步保险库");
+    } catch (e) {
+      if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -52,7 +68,7 @@ export function VaultItemPicker({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, query, kind, withVault]);
+  }, [open, query, kind, withVault, reloadKey]);
 
   const label = value ? valueName || "已选条目 (保险库锁定中)" : "未选择";
 
@@ -74,7 +90,20 @@ export function VaultItemPicker({
           <DialogHeader>
             <DialogTitle>{kind === "key" ? "选择私钥条目" : "选择密码条目"}</DialogTitle>
           </DialogHeader>
-          <Input autoFocus placeholder="搜索名称或用户名" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="flex gap-1">
+            <Input autoFocus placeholder="搜索名称或用户名" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="从服务器同步"
+              title="从服务器同步 (找不到刚在 Bitwarden 里新加的条目时点这里)"
+              onClick={syncFromServer}
+              disabled={syncing}
+            >
+              <RefreshCwIcon className={syncing ? "animate-spin" : ""} />
+            </Button>
+          </div>
           <div className="czl-scroll -mx-2 max-h-80 overflow-y-auto">
             {items.map((it) => (
               <button
@@ -98,6 +127,8 @@ export function VaultItemPicker({
             {!loading && items.length === 0 && (
               <p className="text-muted-foreground px-2 py-6 text-center text-sm">
                 {kind === "key" ? "没有含私钥的条目 (SSH 密钥条目, 或带 private_key 字段的条目)" : "没有含密码的登录条目"}
+                <br />
+                刚新加的条目找不到? 点搜索框右边的同步按钮。
               </p>
             )}
           </div>
