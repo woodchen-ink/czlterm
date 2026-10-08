@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/danieljoos/wincred v1.2.3
+	github.com/energye/systray v1.0.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pkg/sftp v1.13.11
 	github.com/wailsapp/wails/v2 v2.12.0

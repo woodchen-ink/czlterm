@@ -4,6 +4,7 @@ import (
 	"embed"
 	"log"
 	"os"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -63,9 +64,9 @@ func main() {
 		Menu:       appMenu(app),
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
-		// 点 X / Alt+F4 / 任务栏关闭都只最小化到图标, 退出走 app.quit。
-		OnBeforeClose: app.beforeClose,
-		Bind:          []any{app},
+		// 点 X 只隐藏到后台继续运行, 靠托盘图标 (macOS 为菜单栏图标) 或 Dock 唤回; 退出走托盘菜单 / ⌘Q。
+		HideWindowOnClose: runtime.GOOS == "windows" || runtime.GOOS == "darwin",
+		Bind:              []any{app},
 		Windows: &windows.Options{
 			WebviewUserDataPath: webviewDir,
 		},

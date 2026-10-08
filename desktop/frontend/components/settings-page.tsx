@@ -10,7 +10,6 @@ import {
   InfoIcon,
   KeyRoundIcon,
   Loader2Icon,
-  PowerIcon,
   RefreshCwIcon,
   SquareTerminalIcon,
 } from "lucide-react";
@@ -109,9 +108,6 @@ export function SettingsPage({
           <ArrowLeftIcon /> 返回
         </Button>
         <h1 className="text-sm font-semibold">设置</h1>
-        <Button variant="ghost" size="sm" className="ml-auto" title="点关闭按钮只会最小化, 这里才是退出" onClick={() => api.QuitApp()}>
-          <PowerIcon /> 退出程序
-        </Button>
       </div>
 
       <div className="flex min-h-0 flex-1">

@@ -126,7 +126,7 @@ func (a *App) InstallUpdate() error {
 	}
 	a.log.Info("installing update", "version", info.Release.Version)
 	// 留一点时间让界面收到响应。
-	time.AfterFunc(300*time.Millisecond, a.quit)
+	time.AfterFunc(300*time.Millisecond, func() { wruntime.Quit(a.ctx) })
 	return nil
 }
 
