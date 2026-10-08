@@ -27,7 +27,7 @@ const (
 // 项目链接, 显示在「关于」页。ForumURL 为空时界面不显示论坛入口。
 const (
 	projectURL = "https://github.com/" + update.Repo
-	forumURL   = ""
+	forumURL   = "https://www.sunai.net/t/topic/1533"
 )
 
 // UpdateInfo 是检查结果。
