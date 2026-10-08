@@ -1,5 +1,7 @@
 # czlterm
 
+[English](README.md) | 简体中文
+
 轻量的连接管理器。SSH、RDP、VNC 都交给系统自带或常用的客户端，czlterm 只负责管理连接、从 Vaultwarden 取凭据、管理远程文件，以及给 AI 提供 MCP 接口。
 
 - **不内置终端和远程桌面**：SSH 在系统终端里打开（Terminal、iTerm2、Ghostty、WezTerm、kitty、Windows Terminal、PowerShell）；RDP 在 macOS 上用 Windows App，在 Windows 上用 mstsc；VNC 在 macOS 上用系统自带的屏幕共享，在 Windows 上用 TigerVNC
@@ -29,12 +31,24 @@
 |---|---|
 | SSH 私钥 | 解密后放进 czlterm 进程内为这个连接单独开的 ssh-agent 端点，通过 `SSH_AUTH_SOCK` 交给系统 ssh。跳板链上各跳的私钥放在同一个端点里 |
 | SSH 密码 | 通过 `SSH_ASKPASS` 回调 czlterm，凭一次性令牌取密码。主机指纹确认、两步验证码等其它提示仍在终端里由你自己回答 |
-| RDP（Windows） | 临时写入凭据管理器 `TERMSRV/<host>`，2 分钟后删除 |
+| RDP（Windows） | 临时写入凭据管理器 `TERMSRV/<host>`，2 分钟后还原：原来存过这台主机的凭据就写回去，没有就删除 |
 | RDP（macOS） | Windows App 不接受外部传入的密码，所以把密码复制到剪贴板，45 秒后清除 |
-| VNC（macOS） | 通过 `vnc://user:pass@host` 打开屏幕共享 |
+| VNC（macOS） | 用 `vnc://` 链接打开屏幕共享。密码不放进链接（链接是命令行参数，同机其他用户能看到），而是复制到剪贴板，45 秒后清除 |
 | VNC（Windows） | 给 TigerVNC 生成 `-passwd` 文件，2 分钟后删除；其它查看器改用剪贴板 |
 
 保险库锁定（手动锁定或空闲超时）或退出程序时，agent 端点、进程内的 SSH 连接和 bw 会话都会被清除。
+
+## 安装
+
+从 [Releases](https://github.com/woodchen-ink/czlterm/releases) 下载：
+
+- **Windows**：`czlterm-amd64-installer.exe`，按用户安装到 `%LOCALAPPDATA%\CZL\czlterm`，不需要管理员权限
+- **macOS**：`czlterm-darwin-universal.dmg`，Intel 和 Apple Silicon 通用。应用没有 Apple 开发者签名，第一次打开如果提示"已损坏"，执行一次：
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/czlterm.app
+  ```
+
+介绍与讨论：[SunAI 论坛帖](https://www.sunai.net/t/topic/1533)
 
 ## 前置条件
 
@@ -84,3 +98,7 @@ cd desktop && wails build
 ```
 
 Windows 安装包：`.\build.ps1`（需要 NSIS）。推送 `v*` 标签后，GitHub Actions 会构建 Windows 安装包和 macOS DMG 并发布到 Releases。
+
+## 许可证
+
+[AGPL-3.0](LICENSE)
