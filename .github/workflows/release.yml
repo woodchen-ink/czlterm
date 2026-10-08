@@ -1,0 +1,185 @@
+# 打 v* tag 时构建 Windows 安装包与 macOS 应用(DMG), 生成 SHA256SUMS 并发布 GitHub Release。
+# SHA256SUMS 供下载后校验。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号 (如 v0.1.0), 仅构建不发布"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  WAILS_VERSION: v2.12.0
+
+jobs:
+  # 编译前先跑测试与前端检查, 失败即中止发布。
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: desktop/frontend/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/frontend/pnpm-lock.yaml
+
+      - name: Go tests
+        working-directory: desktop
+        run: go test ./internal/...
+
+      - name: Generate bindings and check frontend
+        working-directory: desktop
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          # embed 需要导出目录存在; 绑定生成会编译 main 包。
+          mkdir -p frontend/out && touch frontend/out/index.html
+          "$(go env GOPATH)/bin/wails" generate module
+          cd frontend && pnpm install --frozen-lockfile && pnpm run typecheck && pnpm run lint
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: desktop/frontend/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/frontend/pnpm-lock.yaml
+
+      - name: Install Wails CLI and NSIS
+        shell: pwsh
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
+
+      - name: Build
+        shell: pwsh
+        run: ./build.ps1 ${{ github.event.inputs.version || github.ref_name }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: desktop/build/bin/czlterm-amd64-installer.exe
+          if-no-files-found: error
+
+  macos:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: desktop/frontend/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/frontend/pnpm-lock.yaml
+
+      - name: Build
+        working-directory: desktop
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          PRODUCT_VERSION="${VERSION#v}"; PRODUCT_VERSION="${PRODUCT_VERSION%%-*}"
+          sed -i '' -E "s/\"productVersion\": *\"[^\"]*\"/\"productVersion\": \"${PRODUCT_VERSION}\"/" wails.json
+          "$(go env GOPATH)/bin/wails" build -platform darwin/universal -ldflags "-X main.version=${VERSION}"
+
+      # 没有 Apple 开发者证书: 整个包做 ad-hoc 签名(Apple Silicon 不运行无签名代码, lipo 合并与写入 Info.plist
+      # 会让链接器给的签名失效), 再打 DMG(首次安装, 拖进「应用程序」)与 zip(免安装分发)。
+      - name: Package
+        working-directory: desktop/build/bin
+        run: |
+          app=$(ls -d *.app | head -n1)
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          ditto -c -k --keepParent "$app" czlterm-darwin-universal.zip
+          mkdir dmg && ditto "$app" "dmg/$app" && ln -s /Applications dmg/Applications
+          hdiutil create -volname "czlterm" -srcfolder dmg -ov -format UDZO czlterm-darwin-universal.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            desktop/build/bin/czlterm-darwin-universal.dmg
+            desktop/build/bin/czlterm-darwin-universal.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 版本说明写在带注释的 tag 里(git tag -a vX.Y.Z -F notes.md), 这里取出作为 Release 正文,
+      # 桌面端「发现新版本」里展示的也是它。
+      # 误打了轻量 tag 时退回到上个版本以来的提交说明, 不让 Release 只剩一行 Full Changelog。
+      - name: Release notes from tag message
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          if [ "$(git cat-file -t "$TAG")" = "tag" ]; then
+            git tag -l --format='%(contents)' "$TAG" | sed '/-----BEGIN PGP SIGNATURE-----/,$d' > release-notes.md
+          else
+            echo "::warning::${TAG} 是轻量 tag, 没有版本说明, 改用提交记录。请用 git tag -a ${TAG} -F notes.md"
+            prev=$(git describe --tags --abbrev=0 --match 'v*' "${TAG}^" 2>/dev/null || true)
+            range="$TAG -1"; [ -n "$prev" ] && range="${prev}..${TAG}"
+            git log --no-merges --format='### %s%n%n%b' $range | grep -vE '^(Co-Authored-By|Claude-Session):' > release-notes.md
+          fi
+          cat release-notes.md
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum czlterm-* > SHA256SUMS && cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: release-notes.md
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

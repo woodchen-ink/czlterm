@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "czlterm",
+  "outputfilename": "czlterm",
+  "frontend:dir": "frontend",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm run build",
+  "frontend:dev:watcher": "pnpm run dev",
+  "frontend:dev:serverUrl": "http://localhost:3000",
+  "author": {
+    "name": "wood"
+  },
+  "info": {
+    "companyName": "CZL",
+    "productName": "czlterm",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 CZL",
+    "comments": "Lightweight connection manager: SSH, RDP, VNC, SFTP, Vaultwarden, MCP"
+  }
+}
