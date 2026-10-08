@@ -79,6 +79,11 @@ echo "memory_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)"
 echo "memory_available_kb=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)"
 echo "memory_bytes=$(sysctl -n hw.memsize 2>/dev/null || sysctl -n hw.physmem 2>/dev/null)"
 df -Pk / 2>/dev/null | awk 'NR==2{print "disk_total_kb="$2; print "disk_used_kb="$3}'
+# 群晖等 NAS 的 / 只是几 G 的系统分区, 数据在 /volume1: 汇总所有块设备文件系统, 同一设备只算一次 (btrfs 子卷、bind mount)。
+# macOS 的 APFS 卷共享容器, 每卷都报整个容器大小, 只看 /。
+if [ "$(uname -s)" != Darwin ]; then
+  df -Pk 2>/dev/null | awk 'NR>1 && $1 ~ /^\/dev\// && $1 !~ /^\/dev\/loop/ && !seen[$1]++ {t+=$2; u+=$3} END{if(t>0){print "disk_total_kb="t; print "disk_used_kb="u}}'
+fi
 up=$(cut -d. -f1 /proc/uptime 2>/dev/null)
 if [ -z "$up" ]; then
   b=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \([0-9]*\).*/\1/p')
@@ -92,7 +97,9 @@ exit 0
 const windowsScript = `$ErrorActionPreference = 'SilentlyContinue'
 $o = Get-CimInstance Win32_OperatingSystem
 $c = Get-CimInstance Win32_Processor | Select-Object -First 1
-$d = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
+$d = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Measure-Object -Property Size, FreeSpace -Sum
+$dSize = ($d | Where-Object Property -eq Size).Sum
+$dFree = ($d | Where-Object Property -eq FreeSpace).Sum
 "os_id=windows"
 "os_name=$($o.Caption)"
 "os_version=$($o.Version)"
@@ -103,8 +110,8 @@ $d = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
 "cores=$($c.NumberOfLogicalProcessors)"
 "memory_kb=$($o.TotalVisibleMemorySize)"
 "memory_available_kb=$($o.FreePhysicalMemory)"
-"disk_total_kb=$([int64]($d.Size / 1024))"
-"disk_used_kb=$([int64](($d.Size - $d.FreeSpace) / 1024))"
+"disk_total_kb=$([int64]($dSize / 1024))"
+"disk_used_kb=$([int64](($dSize - $dFree) / 1024))"
 "uptime=$([int64]((Get-Date) - $o.LastBootUpTime).TotalSeconds)"
 `
 

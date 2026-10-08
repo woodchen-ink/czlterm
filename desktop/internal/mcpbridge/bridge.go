@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -38,7 +37,7 @@ func InfoPath() (string, error) {
 	return filepath.Join(dir, FileName), nil
 }
 
-const bridgeWaitTimeout = 30 * time.Second
+const bridgeWaitTimeout = 10 * time.Second
 
 // Run 运行 stdio 桥, 返回进程退出码。
 func Run(version string) int {
@@ -85,27 +84,20 @@ func Run(version string) int {
 	return 0
 }
 
-// waitForMCP 读取桌面端写下的连接信息; 桌面端未运行时启动它并等待。
+// waitForMCP 等待桌面端写下的连接信息, 覆盖桌面端与 MCP 客户端同时启动的情况。
+// 不主动启动桌面端: MCP 客户端每开一个会话就会拉起一次桥, 桥若启动桌面端, 用户退出程序后窗口会被反复唤起。
 func waitForMCP(ctx context.Context) (Info, error) {
 	path, err := InfoPath()
 	if err != nil {
 		return Info{}, err
 	}
-	launched := false
 	deadline := time.Now().Add(bridgeWaitTimeout)
 	for {
 		if info, ok := ReadInfo(ctx, path); ok {
 			return info, nil
 		}
-		if !launched {
-			launched = true
-			if exe, err := os.Executable(); err == nil {
-				// 已在运行时单实例锁会让新进程立即退出。
-				_ = exec.Command(exe).Start()
-			}
-		}
 		if time.Now().After(deadline) {
-			return Info{}, errors.New("czlterm is not running or MCP is disabled; enable it in czlterm → 设置 → MCP")
+			return Info{}, errors.New("czlterm is not running or MCP is disabled; start czlterm and enable it in 设置 → MCP")
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
