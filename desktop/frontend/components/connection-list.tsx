@@ -10,9 +10,12 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import type { ConnectionView } from "@/lib/api";
+import type { ConnectionView, Script } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export interface ConnectionActions {
@@ -21,17 +24,21 @@ export interface ConnectionActions {
   edit: (c: ConnectionView) => void;
   duplicate: (c: ConnectionView) => void;
   remove: (c: ConnectionView) => void;
+  runScript: (c: ConnectionView, s: Script) => void;
+  manageScripts: () => void;
 }
 
 /** 侧栏连接列表: 按分组折叠, 双击连接, 右键更多操作。 */
 export function ConnectionList({
   items,
+  scripts,
   query,
   selectedId,
   onSelect,
   actions,
 }: {
   items: ConnectionView[];
+  scripts: Script[];
   query: string;
   selectedId: string;
   onSelect: (id: string) => void;
@@ -84,6 +91,7 @@ export function ConnectionList({
                 <ConnectionRow
                   key={c.id}
                   c={c}
+                  scripts={scripts}
                   indent={!!group}
                   selected={c.id === selectedId}
                   onSelect={() => onSelect(c.id)}
@@ -99,12 +107,14 @@ export function ConnectionList({
 
 function ConnectionRow({
   c,
+  scripts,
   indent,
   selected,
   onSelect,
   actions,
 }: {
   c: ConnectionView;
+  scripts: Script[];
   indent: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -139,6 +149,20 @@ function ConnectionRow({
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => actions.connect(c)}>连接</ContextMenuItem>
         {c.protocol === "ssh" && <ContextMenuItem onSelect={() => actions.openFiles(c)}>文件</ContextMenuItem>}
+        {c.protocol === "ssh" && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>运行脚本</ContextMenuSubTrigger>
+            <ContextMenuSubContent className="czl-scroll max-h-80 overflow-y-auto">
+              {scripts.map((s) => (
+                <ContextMenuItem key={s.id} onSelect={() => actions.runScript(c, s)}>
+                  {s.group ? `${s.group} / ${s.name}` : s.name}
+                </ContextMenuItem>
+              ))}
+              {scripts.length > 0 && <ContextMenuSeparator />}
+              <ContextMenuItem onSelect={actions.manageScripts}>管理脚本…</ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => actions.edit(c)}>编辑</ContextMenuItem>
         <ContextMenuItem onSelect={() => actions.duplicate(c)}>复制</ContextMenuItem>

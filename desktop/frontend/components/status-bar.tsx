@@ -1,6 +1,6 @@
 "use client";
 
-import { LockKeyholeIcon, LockKeyholeOpenIcon, RefreshCwIcon, SettingsIcon } from "lucide-react";
+import { FileCode2Icon, LockKeyholeIcon, LockKeyholeOpenIcon, RefreshCwIcon, SettingsIcon } from "lucide-react";
 
 import { useVault } from "@/components/vault-provider";
 import { Button } from "@/components/ui/button";
@@ -18,16 +18,18 @@ const vaultLabels: Record<string, string> = {
   unavailable: "未找到 bw",
 };
 
-/** 侧栏底部: 保险库状态、同步、设置。 */
+/** 侧栏底部: 保险库状态、同步、脚本库、设置。 */
 export function StatusBar({
   sync,
   syncEnabled,
   onSync,
+  onScripts,
   onSettings,
 }: {
   sync: SyncStatus | null;
   syncEnabled: boolean;
   onSync: () => void;
+  onScripts: () => void;
   onSettings: () => void;
 }) {
   const { status, requestUnlock, lock } = useVault();
@@ -61,6 +63,14 @@ export function StatusBar({
           </Button>
         </TooltipTrigger>
         <TooltipContent>{syncHint}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label="脚本" onClick={onScripts}>
+            <FileCode2Icon />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>常用脚本</TooltipContent>
       </Tooltip>
       <Button variant="ghost" size="icon-sm" aria-label="设置" onClick={onSettings}>
         <SettingsIcon />

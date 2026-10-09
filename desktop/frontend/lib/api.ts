@@ -4,7 +4,7 @@
 
 import * as App from "@/wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn } from "@/wailsjs/runtime/runtime";
-import type { conn, facts, launch, main, remotefs, settings, vault } from "@/wailsjs/go/models";
+import type { conn, facts, launch, main, remotefs, script, settings, vault } from "@/wailsjs/go/models";
 
 export type Connection = conn.Connection;
 export type ConnectionView = main.ConnectionView;
@@ -22,6 +22,8 @@ export type VaultItem = vault.ItemSummary;
 export type UpdateInfo = main.UpdateInfo;
 export type AboutInfo = main.AboutInfo;
 export type Facts = facts.Facts;
+export type Script = script.Script;
+export type ScriptList = main.ScriptList;
 
 export type Protocol = "ssh" | "rdp" | "vnc";
 
@@ -67,3 +69,8 @@ export function emptyConnection(protocol: Protocol = "ssh"): Connection {
 }
 
 export const defaultPort: Record<Protocol, number> = { ssh: 22, rdp: 3389, vnc: 5900 };
+
+/** 新建脚本的初始值。 */
+export function emptyScript(): Script {
+  return { id: "", name: "", group: "", content: "", notes: "", updatedAt: "" };
+}

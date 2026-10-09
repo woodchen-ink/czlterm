@@ -1,6 +1,6 @@
 "use client";
 
-import { CopyIcon, MoreHorizontalIcon, PencilIcon, PlayIcon, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, CopyIcon, FileCode2Icon, MoreHorizontalIcon, PencilIcon, PlayIcon, Trash2Icon } from "lucide-react";
 
 import { FileBrowser } from "@/components/file-browser";
 import type { ConnectionActions } from "@/components/connection-list";
@@ -13,11 +13,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ConnectionView } from "@/lib/api";
+import type { ConnectionView, Script } from "@/lib/api";
 import { formatTime } from "@/lib/format";
 
 export type DetailTab = "overview" | "files";
@@ -25,11 +26,13 @@ export type DetailTab = "overview" | "files";
 /** 右侧面板: 连接概览与 SFTP 文件管理。 */
 export function ConnectionDetail({
   c,
+  scripts,
   tab,
   onTabChange,
   actions,
 }: {
   c: ConnectionView;
+  scripts: Script[];
   tab: DetailTab;
   onTabChange: (t: DetailTab) => void;
   actions: ConnectionActions;
@@ -56,6 +59,25 @@ export function ConnectionDetail({
             <TabsTrigger value="overview">概览</TabsTrigger>
             <TabsTrigger value="files">文件</TabsTrigger>
           </TabsList>
+        )}
+        {isSSH && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <FileCode2Icon /> 脚本 <ChevronDownIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="czl-scroll max-h-80 min-w-48 overflow-y-auto">
+              {scripts.length === 0 && <DropdownMenuLabel className="text-muted-foreground font-normal">还没有脚本</DropdownMenuLabel>}
+              {scripts.map((s) => (
+                <DropdownMenuItem key={s.id} onSelect={() => actions.runScript(c, s)}>
+                  <PlayIcon /> {s.group ? `${s.group} / ${s.name}` : s.name}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={actions.manageScripts}>管理脚本…</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         <Button onClick={() => actions.connect(c)}>
           <PlayIcon /> 连接

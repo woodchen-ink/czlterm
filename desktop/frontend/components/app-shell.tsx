@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ConnectionDetail, type DetailTab } from "@/components/connection-detail";
 import { ConnectionForm } from "@/components/connection-form";
 import { ConnectionList, type ConnectionActions } from "@/components/connection-list";
+import { ScriptsPage } from "@/components/scripts-page";
 import { SettingsPage, type SettingsTab } from "@/components/settings-page";
 import { StatusBar } from "@/components/status-bar";
 import { UnlockCancelled, useVault, VaultProvider } from "@/components/vault-provider";
@@ -33,6 +34,8 @@ import {
   type ConnectionView,
   type EditStatus,
   type Protocol,
+  type Script,
+  type ScriptList,
   type SyncStatus,
   type UpdateInfo,
 } from "@/lib/api";
@@ -59,6 +62,8 @@ function Shell() {
   const [formKey, setFormKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("apps");
+  const [scripts, setScripts] = useState<ScriptList | null>(null);
+  const [scriptsOpen, setScriptsOpen] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [removing, setRemoving] = useState<ConnectionView | null>(null);
   const [sync, setSync] = useState<SyncStatus | null>(null);
@@ -83,6 +88,14 @@ function Shell() {
     }
   }, []);
 
+  const reloadScripts = useCallback(async () => {
+    try {
+      setScripts(await api.ListScripts());
+    } catch (e) {
+      toast.error(errorText(e));
+    }
+  }, []);
+
   const loadSettings = useCallback(() => {
     api
       .GetSettings()
@@ -93,6 +106,7 @@ function Shell() {
   useEffect(() => {
     queueMicrotask(() => {
       void reload();
+      void reloadScripts();
       loadSettings();
     });
     api.GetSyncStatus().then(setSync).catch(() => {});
@@ -101,6 +115,7 @@ function Shell() {
       if (s.running) return;
       // 同步可能拉来了别的设备上的改动。
       void reload();
+      void reloadScripts();
       if (!manualSync.current) {
         // 后台同步 (自动同步、保存设置后) 失败一律提示, 不能只藏在按钮的悬停说明里。
         if (s.error) toast.error(`同步失败: ${errorText(s.error)}`);
@@ -122,7 +137,7 @@ function Shell() {
       offEdit();
       offUpdate();
     };
-  }, [reload, loadSettings]);
+  }, [reload, reloadScripts, loadSettings]);
 
   // 保险库状态变化后条目名称 (列表里的派生字段) 随之出现或消失。
   useEffect(() => {
@@ -131,6 +146,21 @@ function Shell() {
 
   const items = useMemo(() => list?.items ?? [], [list]);
   const selected = items.find((c) => c.id === selectedId) ?? null;
+
+  const scriptItems = useMemo(() => scripts?.items ?? [], [scripts]);
+
+  // 运行脚本与连接一样可能要先解锁保险库。
+  const runScript = useCallback(
+    async (c: ConnectionView, s: Script) => {
+      try {
+        await withVault(() => api.RunScript(c.id, s.id));
+        toast.success(`正在 ${c.name} 上运行 ${s.name}`);
+      } catch (e) {
+        if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
+      }
+    },
+    [withVault],
+  );
 
   const actions: ConnectionActions = useMemo(
     () => ({
@@ -162,8 +192,10 @@ function Shell() {
         }
       },
       remove: (c) => setRemoving(c),
+      runScript,
+      manageScripts: () => setScriptsOpen(true),
     }),
-    [withVault, reload],
+    [withVault, reload, runScript],
   );
 
   function create(protocol: Protocol) {
@@ -179,7 +211,20 @@ function Shell() {
     setSettingsOpen(true);
   }
 
-  // 设置是整页视图, 覆盖侧栏与主区域; 返回后回到原来的连接。
+  // 设置与脚本库是整页视图, 覆盖侧栏与主区域; 返回后回到原来的连接。
+  if (scriptsOpen) {
+    return (
+      <ScriptsPage
+        scripts={scriptItems}
+        groups={scripts?.groups ?? []}
+        connections={items}
+        initialConnId={selectedId}
+        onClose={() => setScriptsOpen(false)}
+        onChanged={reloadScripts}
+        onRun={runScript}
+      />
+    );
+  }
   if (settingsOpen) {
     return (
       <SettingsPage
@@ -238,6 +283,7 @@ function Shell() {
             <ConnectionList
               items={items}
               query={query}
+              scripts={scriptItems}
               selectedId={selectedId}
               onSelect={(id) => {
                 if (id !== selectedId) setTab("overview");
@@ -257,12 +303,18 @@ function Shell() {
             <span className="truncate">新版本 {update.release.version} 可用, 点击更新</span>
           </button>
         )}
-        <StatusBar sync={sync} syncEnabled={syncEnabled} onSync={syncNow} onSettings={() => openSettings("apps")} />
+        <StatusBar
+          sync={sync}
+          syncEnabled={syncEnabled}
+          onSync={syncNow}
+          onScripts={() => setScriptsOpen(true)}
+          onSettings={() => openSettings("apps")}
+        />
       </aside>
 
       <main className="bg-background min-w-0 flex-1">
         {selected ? (
-          <ConnectionDetail key={selected.id} c={selected} tab={tab} onTabChange={setTab} actions={actions} />
+          <ConnectionDetail key={selected.id} c={selected} scripts={scriptItems} tab={tab} onTabChange={setTab} actions={actions} />
         ) : (
           <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
             <p>选择左侧的连接, 双击直接连接</p>

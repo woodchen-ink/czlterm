@@ -16,6 +16,7 @@ import (
 	"github.com/woodchen-ink/czlterm/desktop/internal/facts"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/paths"
+	"github.com/woodchen-ink/czlterm/desktop/internal/script"
 	"github.com/woodchen-ink/czlterm/desktop/internal/secret"
 	"github.com/woodchen-ink/czlterm/desktop/internal/settings"
 	"github.com/woodchen-ink/czlterm/desktop/internal/sshx"
@@ -40,6 +41,7 @@ type App struct {
 	log *slog.Logger
 
 	conns    *conn.Store
+	scripts  *script.Store
 	facts    *facts.Store
 	settings *settings.Store
 	vault    *vault.Vault
@@ -110,6 +112,9 @@ func (a *App) init() error {
 		return err
 	}
 	if a.conns, err = conn.Open(a.dataDir); err != nil {
+		return err
+	}
+	if a.scripts, err = script.Open(a.dataDir); err != nil {
 		return err
 	}
 	cacheDir, err := paths.Sub("cache")
