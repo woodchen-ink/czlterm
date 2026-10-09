@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
 	"strings"
+	"time"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
 )
@@ -17,6 +21,9 @@ type ConnectionView struct {
 	// OSID / OSName 来自最近一次采集的机器信息, 列表据此显示系统图标; 从未采集时为空。
 	OSID   string `json:"osId"`
 	OSName string `json:"osName"`
+	// CountryCode (ISO 3166-1 alpha-2, 大写) / Country 是主机所在国家, 未查到或私网地址时为空。
+	CountryCode string `json:"countryCode"`
+	Country     string `json:"country"`
 }
 
 // ConnectionList 是连接列表。Warnings 报告读不出来的连接文件, 不让一个坏文件挡住整个列表。
@@ -38,6 +45,8 @@ func (a *App) ListConnections() (ConnectionList, error) {
 	}
 	out := ConnectionList{Items: make([]ConnectionView, 0, len(list)), Groups: []string{}, Warnings: []string{}}
 	seen := map[string]bool{}
+	geoOn := a.settings.Get().GeoLookup
+	hosts := make([]string, 0, len(list))
 	for _, c := range list {
 		v := ConnectionView{Connection: c, JumpName: names[c.Jump]}
 		v.VaultItemName = a.itemName(c.VaultItem)
@@ -46,6 +55,11 @@ func (a *App) ListConnections() (ConnectionList, error) {
 		v.OSID, v.OSName = f.OSID, f.OSName
 		if v.OSID == "" && f.OSLike != "" {
 			v.OSID = strings.Fields(f.OSLike)[0]
+		}
+		if geoOn {
+			g := a.geo.Get(c.Host)
+			v.CountryCode, v.Country = g.CountryCode, g.Country
+			hosts = append(hosts, c.Host)
 		}
 		out.Items = append(out.Items, v)
 		if c.Group != "" && !seen[c.Group] {
@@ -56,7 +70,25 @@ func (a *App) ListConnections() (ConnectionList, error) {
 	for _, e := range errs {
 		out.Warnings = append(out.Warnings, e.Error())
 	}
+	if geoOn {
+		// 有坏文件时列表不完整, 不据此清理缓存。
+		if len(errs) == 0 {
+			a.geo.Prune(hosts)
+		}
+		go a.refreshGeo(hosts)
+	}
 	return out, nil
+}
+
+// refreshGeo 在后台查询缺失或过期的主机国家, 有变化时通知界面重新拉列表。
+func (a *App) refreshGeo(hosts []string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	// 每查一个主机前确认开关仍开着, 关闭后立即停下。
+	enabled := func() bool { return a.settings.Get().GeoLookup }
+	if a.geo.Refresh(ctx, hosts, enabled) {
+		wruntime.EventsEmit(a.ctx, eventGeo)
+	}
 }
 
 func (a *App) itemName(id string) string {

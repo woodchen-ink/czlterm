@@ -38,6 +38,7 @@ export const Events = {
   updateAvailable: "update:available",
   updateProgress: "update:progress",
   factsUpdated: "facts:updated",
+  geoUpdated: "geo:updated",
 } as const;
 
 /** 用系统浏览器打开外部链接。 */

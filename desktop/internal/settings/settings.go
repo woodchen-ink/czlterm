@@ -39,6 +39,9 @@ type Settings struct {
 	// GitAutoSync 为 true 时每次修改连接后自动同步。
 	GitAutoSync bool `json:"gitAutoSync"`
 
+	// GeoLookup 为 true 时把服务器 IP 发给 ip.czl.net 查所在国家, 列表显示国旗; 默认关闭。
+	GeoLookup bool `json:"geoLookup"`
+
 	MCPEnabled bool `json:"mcpEnabled"`
 	// MCPAllowAccess 允许 AI 连到服务器上列目录、读文件 (全部 SSH 连接); 关闭时只能列出连接。
 	// MCPAllowWrite 允许 AI 写文件; MCPAllowExec 允许 AI 执行命令。两者都以 MCPAllowAccess 为前提。

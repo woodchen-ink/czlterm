@@ -132,10 +132,13 @@ function Shell() {
       if (s.error) toast.error(`${s.remote} 上传失败: ${errorText(s.error)}`);
       else toast.success(`已保存到服务器: ${s.remote}`);
     });
+    // 后台查到服务器所在国家后重新拉列表显示国旗。
+    const offGeo = onEvent(Events.geoUpdated, () => void reload());
     return () => {
       offSync();
       offEdit();
       offUpdate();
+      offGeo();
     };
   }, [reload, reloadScripts, loadSettings]);
 

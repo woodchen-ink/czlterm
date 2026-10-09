@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type MCPConfig, type Settings, type SettingsView } from "@/lib/api";
+import { api, openExternal, type MCPConfig, type Settings, type SettingsView } from "@/lib/api";
 import { errorText } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
@@ -185,6 +185,28 @@ export function SettingsPage({
                       />
                     </Field>
                   )}
+                  <div className="border-t pt-5">
+                    <ToggleRow
+                      label="显示服务器国旗"
+                      hint={
+                        <>
+                          仅用于获取服务器国家信息, 不会收集 IP, 查询源为{" "}
+                          <button
+                            type="button"
+                            className="text-primary underline-offset-2 hover:underline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              openExternal("https://ip.czl.net");
+                            }}
+                          >
+                            https://ip.czl.net
+                          </button>
+                        </>
+                      }
+                      checked={form.geoLookup}
+                      onChange={(v) => set("geoLookup", v)}
+                    />
+                  </div>
                 </>
               )}
 
@@ -362,7 +384,7 @@ function ToggleRow({
   onChange,
 }: {
   label: string;
-  hint?: string;
+  hint?: React.ReactNode;
   checked: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;

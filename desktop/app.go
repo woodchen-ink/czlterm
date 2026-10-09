@@ -14,6 +14,7 @@ import (
 	"github.com/woodchen-ink/czlterm/desktop/internal/askpass"
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
 	"github.com/woodchen-ink/czlterm/desktop/internal/facts"
+	"github.com/woodchen-ink/czlterm/desktop/internal/geo"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/paths"
 	"github.com/woodchen-ink/czlterm/desktop/internal/script"
@@ -30,6 +31,7 @@ const (
 	eventSyncStatus    = "sync:status"
 	eventEditStatus    = "edit:status"
 	eventFacts         = "facts:updated"
+	eventGeo           = "geo:updated"
 )
 
 // App 承载应用生命周期, 方法绑定给前端调用。
@@ -43,6 +45,7 @@ type App struct {
 	conns    *conn.Store
 	scripts  *script.Store
 	facts    *facts.Store
+	geo      *geo.Store
 	settings *settings.Store
 	vault    *vault.Vault
 	agents   *agent.Server
@@ -122,6 +125,9 @@ func (a *App) init() error {
 		return err
 	}
 	if a.facts, err = facts.Open(a.dataDir, cacheDir); err != nil {
+		return err
+	}
+	if a.geo, err = geo.Open(cacheDir); err != nil {
 		return err
 	}
 	if a.askpass, err = askpass.Start(); err != nil {

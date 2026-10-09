@@ -79,6 +79,10 @@ func (a *App) SaveSettings(in settings.Settings) (settings.Settings, error) {
 	case !next.VaultRemember && prev.VaultRemember:
 		_ = secret.Set(secret.VaultSessionKey, "")
 	}
+	// 关闭国家查询时清掉本机缓存的 IP 与国家。
+	if !next.GeoLookup && prev.GeoLookup {
+		a.geo.Clear()
+	}
 	if next.MCPEnabled && !prev.MCPEnabled {
 		if err := a.startMCP(); err != nil {
 			return next, err

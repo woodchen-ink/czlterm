@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRightIcon, FolderIcon } from "lucide-react";
 
+import { CountryFlag } from "@/components/country-flag";
 import { OSIcon } from "@/components/os-icon";
 import { ProtocolIcon } from "@/components/protocol-icon";
 import {
@@ -144,6 +145,7 @@ function ConnectionRow({
             <span className="block truncate text-sm">{c.name}</span>
             <span className="text-muted-foreground block truncate text-xs">{target}</span>
           </span>
+          {c.countryCode && <CountryFlag code={c.countryCode} title={c.country || c.countryCode} />}
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
