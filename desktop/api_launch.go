@@ -62,7 +62,9 @@ func (a *App) openSSH(c conn.Connection, hops []hop, sess sshSession) error {
 	}
 	target := hops[len(hops)-1]
 
-	var args []string
+	// 客户端保活: 代理 / NAT 会掐掉空闲 TCP, 没有保活时终端闲置一会儿就断开 (exit 255)。
+	// 外层会话的保活经跳板隧道传输, 也让跳板那段连接保持活跃。
+	args := []string{"-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3"}
 	if len(hops) > 1 {
 		var jumps []string
 		for _, h := range hops[:len(hops)-1] {
