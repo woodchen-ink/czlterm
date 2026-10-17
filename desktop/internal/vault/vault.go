@@ -102,7 +102,9 @@ type Vault struct {
 	lockTimer *time.Timer
 	// lockGen 每次重设计时器加一; 已触发、正在等锁的旧计时器据此放弃, 不锁掉刚用过或刚解锁的保险库。
 	lockGen uint64
-	onLock  func()
+	// sessionGen 在开始解锁、提交会话或锁定时递增, 使旧查询与旧解锁任务失效。
+	sessionGen uint64
+	onLock     func()
 }
 
 // New 创建 Vault。onLock 在自动锁定时回调, 用于通知界面。
@@ -119,11 +121,11 @@ func (v *Vault) Configure(bwPath string, autoLock time.Duration) {
 	v.armTimerLocked()
 }
 
-// Status 查询 bw 状态。已解锁时直接返回内存状态, 不再调用 bw。
+// Status 查询 bw 账户状态, 并以查询完成时的内存会话判断本程序是否已解锁。
 func (v *Vault) Status(ctx context.Context) Status {
 	v.mu.Lock()
 	path, err := v.resolveLocked()
-	unlocked := v.session != ""
+	gen := v.sessionGen
 	v.mu.Unlock()
 
 	if err != nil {
@@ -138,13 +140,20 @@ func (v *Vault) Status(ctx context.Context) Status {
 		return Status{Status: StatusUnavailable, BWPath: path, Error: "3002 unexpected bw status output"}
 	}
 	st.BWPath = path
-	// 不带 BW_SESSION 调 status 时 bw 只会报 locked; 内存里有会话才算本程序已解锁。
-	if st.Status == StatusLocked && unlocked {
-		st.Status = StatusUnlocked
+	// bw 调用期间可能已恢复或锁定; 不能用旧结果清理新会话。
+	v.mu.Lock()
+	if st.Status == StatusUnauthenticated && gen == v.sessionGen {
+		v.lockLocked() // 原子核对代次并清理; 此方法会释放锁。
+		return st
 	}
-	if st.Status == StatusUnauthenticated {
-		v.Lock()
+	// 即使父进程带了 BW_SESSION, 也只有本程序持有会话才算已解锁。
+	if st.Status == StatusLocked || st.Status == StatusUnlocked || st.Status == StatusUnauthenticated {
+		st.Status = StatusLocked
+		if v.session != "" {
+			st.Status = StatusUnlocked
+		}
 	}
+	v.mu.Unlock()
 	return st
 }
 
@@ -155,6 +164,8 @@ func (v *Vault) Unlock(ctx context.Context, password string) error {
 	}
 	v.mu.Lock()
 	path, err := v.resolveLocked()
+	v.sessionGen++
+	gen := v.sessionGen
 	v.mu.Unlock()
 	if err != nil {
 		return err
@@ -174,13 +185,7 @@ func (v *Vault) Unlock(ctx context.Context, password string) error {
 		return err
 	}
 
-	v.mu.Lock()
-	v.session = session
-	v.items = items
-	v.lastUsed = time.Now()
-	v.armTimerLocked()
-	v.mu.Unlock()
-	return nil
+	return v.commitSession(gen, session, items)
 }
 
 // Session 返回当前会话密钥, 未解锁时为空。供「记住解锁」存进系统钥匙串。
@@ -198,6 +203,8 @@ func (v *Vault) Restore(ctx context.Context, session string) error {
 	}
 	v.mu.Lock()
 	path, err := v.resolveLocked()
+	v.sessionGen++
+	gen := v.sessionGen
 	v.mu.Unlock()
 	if err != nil {
 		return err
@@ -214,12 +221,21 @@ func (v *Vault) Restore(ctx context.Context, session string) error {
 	if err != nil {
 		return err
 	}
+	return v.commitSession(gen, session, items)
+}
+
+// commitSession 只提交仍然有效的解锁任务, 防止后台恢复撤销较新的锁定。
+func (v *Vault) commitSession(gen uint64, session string, items map[string]item) error {
 	v.mu.Lock()
+	defer v.mu.Unlock()
+	if gen != v.sessionGen {
+		return ErrLocked
+	}
+	v.sessionGen++
 	v.session = session
 	v.items = items
 	v.lastUsed = time.Now()
 	v.armTimerLocked()
-	v.mu.Unlock()
 	return nil
 }
 
@@ -265,6 +281,7 @@ func (v *Vault) lockIfCurrent(gen uint64) {
 // lockLocked 在持有 v.mu 时调用, 返回前释放锁, 再在锁外回调 onLock。
 func (v *Vault) lockLocked() {
 	wasUnlocked := v.session != ""
+	v.sessionGen++
 	v.lockGen++
 	v.session = ""
 	v.items = nil

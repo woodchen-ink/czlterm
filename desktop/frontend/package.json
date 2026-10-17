@@ -7,7 +7,7 @@
     "build": "next build",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test lib/i18n.test.mjs"
+    "test": "node --test lib/*.test.mjs components/*.test.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

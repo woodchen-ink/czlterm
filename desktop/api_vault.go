@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -58,7 +59,10 @@ func (a *App) restoreVault() {
 	defer cancel()
 	if err := a.vault.Restore(ctx, session); err != nil {
 		a.log.Info("restore vault session", "err", err)
-		_ = secret.Set(secret.VaultSessionKey, "")
+		// 被较新的锁定或解锁取消时, 不删除新操作可能已经保存的会话。
+		if !errors.Is(err, vault.ErrLocked) {
+			_ = secret.Set(secret.VaultSessionKey, "")
+		}
 		return
 	}
 	a.log.Info("vault restored from keychain")
