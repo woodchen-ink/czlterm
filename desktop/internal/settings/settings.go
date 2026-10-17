@@ -26,9 +26,9 @@ type Settings struct {
 
 	// BWPath 是 bw CLI 路径, 为空时在 PATH 中查找。
 	BWPath string `json:"bwPath"`
-	// VaultAutoLockMinutes 是保险库空闲多久后自动锁定, 0 表示直到退出。
+	// VaultAutoLockMinutes 是保险库空闲多久后自动锁定, 默认 0 表示直到退出。
 	VaultAutoLockMinutes int `json:"vaultAutoLockMinutes"`
-	// VaultRemember 为 true 时把 bw 会话密钥存进系统钥匙串, 重启后免输主密码;
+	// VaultRemember 默认开启, 把 bw 会话密钥存进系统钥匙串, 重启后免输主密码;
 	// 手动锁定或空闲超时锁定时删除。
 	VaultRemember bool `json:"vaultRemember"`
 

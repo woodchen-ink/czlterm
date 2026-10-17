@@ -107,7 +107,8 @@ func (a *App) init() error {
 	a.settings, err = settings.Open(cfgDir, settings.Settings{
 		Terminal:             launch.DefaultTerminal(),
 		Editor:               "vscode",
-		VaultAutoLockMinutes: 60,
+		VaultAutoLockMinutes: 0,
+		VaultRemember:        true,
 	})
 	if err != nil {
 		// 设置文件损坏时用默认值继续, 不让整个程序起不来。

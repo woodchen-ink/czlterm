@@ -103,8 +103,11 @@ type Vault struct {
 	// lockGen 每次重设计时器加一; 已触发、正在等锁的旧计时器据此放弃, 不锁掉刚用过或刚解锁的保险库。
 	lockGen uint64
 	// sessionGen 在开始解锁、提交会话或锁定时递增, 使旧查询与旧解锁任务失效。
-	sessionGen uint64
-	onLock     func()
+	sessionGen     uint64
+	onLock         func()
+	accountStatus  Status // 最近一次CLI账户摘要; 已解锁状态不等待CLI。
+	accountPending bool
+	refreshJob     *refreshFlight
 }
 
 // New 创建 Vault。onLock 在自动锁定时回调, 用于通知界面。
@@ -116,14 +119,33 @@ func New(onLock func()) *Vault {
 func (v *Vault) Configure(bwPath string, autoLock time.Duration) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	v.bwPath = strings.TrimSpace(bwPath)
+	path := strings.TrimSpace(bwPath)
+	if path != v.bwPath {
+		v.accountStatus = Status{}
+		v.sessionGen++
+	}
+	v.bwPath = path
 	v.autoLock = autoLock
 	v.armTimerLocked()
 }
 
-// Status 查询 bw 账户状态, 并以查询完成时的内存会话判断本程序是否已解锁。
+// Status 优先返回内存解锁状态; 只有未解锁时才等待CLI账户查询。
 func (v *Vault) Status(ctx context.Context) Status {
 	v.mu.Lock()
+	if v.session != "" {
+		if v.accountStatus.Status == "" && !v.accountPending {
+			v.accountPending = true
+			go v.loadAccountSummary(v.sessionGen, v.bwPathLocked())
+		}
+		st := v.accountStatus
+		st.Status = StatusUnlocked
+		if v.bwPath != "" {
+			st.BWPath = v.bwPath
+		}
+		st.Error = ""
+		v.mu.Unlock()
+		return st
+	}
 	path, err := v.resolveLocked()
 	gen := v.sessionGen
 	v.mu.Unlock()
@@ -142,6 +164,9 @@ func (v *Vault) Status(ctx context.Context) Status {
 	st.BWPath = path
 	// bw 调用期间可能已恢复或锁定; 不能用旧结果清理新会话。
 	v.mu.Lock()
+	if gen == v.sessionGen {
+		v.accountStatus = st
+	}
 	if st.Status == StatusUnauthenticated && gen == v.sessionGen {
 		v.lockLocked() // 原子核对代次并清理; 此方法会释放锁。
 		return st
@@ -209,14 +234,7 @@ func (v *Vault) Restore(ctx context.Context, session string) error {
 	if err != nil {
 		return err
 	}
-	out, err := v.run(ctx, path, session, nil, "status")
-	if err != nil {
-		return fmt.Errorf("3011 check saved session: %w", err)
-	}
-	var st Status
-	if json.Unmarshal(lastJSON(out), &st) != nil || st.Status != StatusUnlocked {
-		return errors.New("3012 saved session is no longer valid")
-	}
+	// 成功解密条目本身就证明会话有效, 不再串行启动一次 bw status。
 	items, err := v.loadItems(ctx, path, session)
 	if err != nil {
 		return err
@@ -236,29 +254,6 @@ func (v *Vault) commitSession(gen uint64, session string, items map[string]item)
 	v.items = items
 	v.lastUsed = time.Now()
 	v.armTimerLocked()
-	return nil
-}
-
-// Refresh 从服务器同步并重新加载条目。
-func (v *Vault) Refresh(ctx context.Context) error {
-	v.mu.Lock()
-	path, session := v.bwPathLocked(), v.session
-	v.mu.Unlock()
-	if session == "" {
-		return ErrLocked
-	}
-	if _, err := v.run(ctx, path, session, nil, "sync"); err != nil {
-		return fmt.Errorf("3005 bw sync failed: %w", err)
-	}
-	items, err := v.loadItems(ctx, path, session)
-	if err != nil {
-		return err
-	}
-	v.mu.Lock()
-	if v.session == session {
-		v.items = items
-	}
-	v.mu.Unlock()
 	return nil
 }
 

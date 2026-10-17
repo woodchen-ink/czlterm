@@ -18,10 +18,10 @@ func TestStatusUsesCurrentSession(t *testing.T) {
 		name, before, after, cliStatus, want string
 	}{
 		{"restored during status", "", "restored", StatusLocked, StatusUnlocked},
-		{"locked during status", "previous", "", StatusLocked, StatusLocked},
+		{"locked during status", "", "", StatusLocked, StatusLocked},
 		{"external session is not ours", "", "", StatusUnlocked, StatusLocked},
 		{"stale logout cannot clear restored session", "", "restored", StatusUnauthenticated, StatusUnlocked},
-		{"current logout clears session", "previous", "previous", StatusUnauthenticated, StatusUnauthenticated},
+		{"current logout while locked", "", "", StatusUnauthenticated, StatusUnauthenticated},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
