@@ -61,6 +61,8 @@ type App struct {
 	// initErr 是启动阶段的致命错误 (数据目录不可用), 界面据此显示错误页而不是空列表。
 	initErr error
 
+	// uiEnglish 只影响本应用的原生菜单，不保存到同步数据。
+	uiEnglish atomic.Bool
 	// quitting 在退出流程中置位: 退出时也会锁定保险库, 但不该删掉「记住解锁」保存的会话。
 	quitting atomic.Bool
 }

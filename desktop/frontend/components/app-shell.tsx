@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpCircleIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +53,7 @@ export function AppShell() {
 }
 
 function Shell() {
+  useLanguage();
   const { withVault, status: vaultStatus } = useVault();
   const [list, setList] = useState<List | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -61,7 +65,7 @@ function Shell() {
   // 每次打开表单换一个 key, 让表单按新的初始值重新挂载。
   const [formKey, setFormKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("apps");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [scripts, setScripts] = useState<ScriptList | null>(null);
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
@@ -84,7 +88,7 @@ function Shell() {
       if (w && w !== lastWarnings.current) l.warnings.forEach((x) => toast.warning(errorText(x)));
       lastWarnings.current = w;
     } catch (e) {
-      setLoadError(errorText(e));
+      setLoadError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -118,8 +122,8 @@ function Shell() {
       void reloadScripts();
       if (!manualSync.current) {
         // 后台同步 (自动同步、保存设置后) 失败一律提示, 不能只藏在按钮的悬停说明里。
-        if (s.error) toast.error(`同步失败: ${errorText(s.error)}`);
-        else if (announceSync.current) toast.success("仓库同步完成");
+        if (s.error) toast.error(t("同步失败: {0}", errorText(s.error)));
+        else if (announceSync.current) toast.success(t("仓库同步完成"));
       }
       announceSync.current = false;
     });
@@ -129,8 +133,8 @@ function Shell() {
       .catch(() => {});
     const offUpdate = onEvent<UpdateInfo>(Events.updateAvailable, setUpdate);
     const offEdit = onEvent<EditStatus>(Events.editStatus, (s) => {
-      if (s.error) toast.error(`${s.remote} 上传失败: ${errorText(s.error)}`);
-      else toast.success(`已保存到服务器: ${s.remote}`);
+      if (s.error) toast.error(t("{0} 上传失败: {1}", s.remote, errorText(s.error)));
+      else toast.success(t("已保存到服务器: {0}", s.remote));
     });
     // 后台查到服务器所在国家后重新拉列表显示国旗。
     const offGeo = onEvent(Events.geoUpdated, () => void reload());
@@ -157,7 +161,7 @@ function Shell() {
     async (c: ConnectionView, s: Script) => {
       try {
         await withVault(() => api.RunScript(c.id, s.id));
-        toast.success(`正在 ${c.name} 上运行 ${s.name}`);
+        toast.success(t("正在 {0} 上运行 {1}", c.name, s.name));
       } catch (e) {
         if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
       }
@@ -170,8 +174,8 @@ function Shell() {
       connect: async (c) => {
         try {
           const r = await withVault(() => api.Connect(c.id));
-          if (r.passwordCopied) toast.success(`正在打开 ${c.name}, 密码已复制到剪贴板, ${r.clipboardSeconds} 秒后清除`);
-          else toast.success(`正在打开 ${c.name}`);
+          if (r.passwordCopied) toast.success(t("正在打开 {0}, 密码已复制到剪贴板, {1} 秒后清除", c.name, r.clipboardSeconds));
+          else toast.success(t("正在打开 {0}", c.name));
         } catch (e) {
           if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
         }
@@ -250,10 +254,10 @@ function Shell() {
     // 同步结束的事件可能晚于返回值到达, 稍等再清标记, 避免同一次结果提示两遍。
     setTimeout(() => (manualSync.current = false), 500);
     if (git.status === "rejected") toast.error(errorText(git.reason));
-    if (vault.status === "rejected") toast.error(`保险库同步失败: ${errorText(vault.reason)}`);
+    if (vault.status === "rejected") toast.error(t("保险库同步失败: {0}", errorText(vault.reason)));
     if (git.status === "fulfilled" && vault.status === "fulfilled") {
-      const what = syncEnabled ? "连接配置已同步" : "连接配置已提交到本地仓库";
-      toast.success(vaultOpen ? `${what}, 保险库条目已更新` : what);
+      const what = syncEnabled ? t("连接配置已同步") : t("连接配置已提交到本地仓库");
+      toast.success(vaultOpen ? t("{0}, 保险库条目已更新", what) : what);
     }
     if (vaultOpen) void reload();
   }
@@ -264,24 +268,24 @@ function Shell() {
         <div className="flex shrink-0 items-center gap-1 p-2">
           <div className="relative min-w-0 flex-1">
             <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-            <Input className="h-7 pl-7 text-sm" placeholder="搜索" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input className="h-7 pl-7 text-sm" placeholder={t("搜索")} value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="新建连接">
+              <Button variant="ghost" size="icon-sm" aria-label={t("新建连接")}>
                 <PlusIcon />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => create("ssh")}>新建 SSH</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => create("rdp")}>新建 RDP</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => create("vnc")}>新建 VNC</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => create("ssh")}>{t("新建 SSH")}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => create("rdp")}>{t("新建 RDP")}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => create("vnc")}>{t("新建 VNC")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
         <div className="czl-scroll min-h-0 flex-1 overflow-y-auto">
           {loadError ? (
-            <p className="text-destructive px-4 py-6 text-sm">{loadError}</p>
+            <p className="text-destructive px-4 py-6 text-sm">{errorText(loadError)}</p>
           ) : (
             <ConnectionList
               items={items}
@@ -303,7 +307,7 @@ function Shell() {
             onClick={() => openSettings("about")}
           >
             <ArrowUpCircleIcon className="size-4 shrink-0" />
-            <span className="truncate">新版本 {update.release.version} 可用, 点击更新</span>
+            <span className="truncate">{t("新版本 {0} 可用, 点击更新", update.release.version)}</span>
           </button>
         )}
         <StatusBar
@@ -311,7 +315,7 @@ function Shell() {
           syncEnabled={syncEnabled}
           onSync={syncNow}
           onScripts={() => setScriptsOpen(true)}
-          onSettings={() => openSettings("apps")}
+          onSettings={() => openSettings("general")}
         />
       </aside>
 
@@ -320,7 +324,8 @@ function Shell() {
           <ConnectionDetail key={selected.id} c={selected} scripts={scriptItems} tab={tab} onTabChange={setTab} actions={actions} />
         ) : (
           <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
-            <p>选择左侧的连接, 双击直接连接</p>
+            <p>{t("选择左侧的连接, 双击直接连接")}
+            </p>
           </div>
         )}
       </main>
@@ -341,11 +346,11 @@ function Shell() {
       <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除连接 {removing?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>只删除连接配置, 保险库里的密码与私钥不受影响。</AlertDialogDescription>
+            <AlertDialogTitle>{t("删除连接 {0}?", removing?.name)}</AlertDialogTitle>
+            <AlertDialogDescription>{t("只删除连接配置, 保险库里的密码与私钥不受影响。")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t("取消")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
                 const c = removing;
@@ -360,8 +365,8 @@ function Shell() {
                 }
               }}
             >
-              删除
-            </AlertDialogAction>
+              {t("删除")}
+              </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

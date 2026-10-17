@@ -9,6 +9,7 @@ package main
 
 void czlTrayStart(const void *png, int length);
 void czlTrayStop(void);
+void czlTrayLanguage(int english);
 void czlActivateApp(void);
 */
 import "C"
@@ -35,6 +36,16 @@ func (a *App) startTray() {
 	trayApp.Store(a)
 	// 1024px 的应用图标, 由 AppKit 缩到菜单栏尺寸(Retina 下取 2 倍像素)。C 侧拷贝后释放。
 	C.czlTrayStart(C.CBytes(appIconPNG), C.int(len(appIconPNG)))
+	a.updateTrayLanguage()
+}
+
+// updateTrayLanguage 在 AppKit 主线程刷新托盘菜单。
+func (a *App) updateTrayLanguage() {
+	var english C.int
+	if a.uiEnglish.Load() {
+		english = 1
+	}
+	C.czlTrayLanguage(english)
 }
 
 func (a *App) stopTray() {

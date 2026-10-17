@@ -5,6 +5,7 @@ package main
 import (
 	_ "embed"
 	"runtime"
+	"sync"
 
 	"github.com/energye/systray"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,6 +16,12 @@ import (
 
 //go:embed build/windows/icon.ico
 var trayIcon []byte
+
+// trayLabels 串行化托盘创建与语言变更，避免启动期间丢失切换。
+var trayLabels struct {
+	sync.Mutex
+	open, quit *systray.MenuItem
+}
 
 func (a *App) startTray() {
 	go func() {
@@ -30,13 +37,29 @@ func (a *App) onTrayReady() {
 	systray.SetOnClick(func(systray.IMenu) { a.showWindow() })
 	systray.SetOnRClick(func(menu systray.IMenu) { _ = menu.ShowMenu() })
 
-	systray.AddMenuItem("打开 czlterm", "").Click(a.showWindow)
+	trayLabels.Lock()
+	defer trayLabels.Unlock()
+	trayLabels.open = systray.AddMenuItem(a.uiText("打开 czlterm", "Open czlterm"), "")
+	trayLabels.open.Click(a.showWindow)
 	systray.AddSeparator()
-	systray.AddMenuItem("退出", "").Click(func() {
+	trayLabels.quit = systray.AddMenuItem(a.uiText("退出", "Quit"), "")
+	trayLabels.quit.Click(func() {
 		if a.ctx != nil {
 			wruntime.Quit(a.ctx)
 		}
 	})
+}
+
+// updateTrayLanguage 更新已创建的菜单；未就绪时 onTrayReady 会读取最新语言。
+func (a *App) updateTrayLanguage() {
+	trayLabels.Lock()
+	defer trayLabels.Unlock()
+	if trayLabels.open != nil {
+		trayLabels.open.SetTitle(a.uiText("打开 czlterm", "Open czlterm"))
+	}
+	if trayLabels.quit != nil {
+		trayLabels.quit.SetTitle(a.uiText("退出", "Quit"))
+	}
 }
 
 func (a *App) stopTray() {

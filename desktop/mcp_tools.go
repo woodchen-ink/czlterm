@@ -125,7 +125,7 @@ type mcpOK struct {
 
 func (a *App) mcpWriteFile(ctx context.Context, _ *mcp.CallToolRequest, in mcpWriteFileIn) (*mcp.CallToolResult, mcpOK, error) {
 	if !a.settings.Get().MCPAllowWrite {
-		return nil, mcpOK{}, errors.New("writing files is disabled: the user must turn on 「允许 AI 写文件」 in czlterm → 设置 → MCP")
+		return nil, mcpOK{}, errors.New("writing files is disabled: the user must turn on 'Allow AI to write files' (允许 AI 写文件) in czlterm → Settings → MCP")
 	}
 	err := a.mcpSFTP(ctx, in.Connection, func(c *sftp.Client) error {
 		return remotefs.WriteFile(c, in.Path, []byte(in.Content))
@@ -181,7 +181,7 @@ func buildScript(in mcpRunIn) (string, string, error) {
 
 func (a *App) mcpRunCommand(ctx context.Context, _ *mcp.CallToolRequest, in mcpRunIn) (*mcp.CallToolResult, sshx.ExecResult, error) {
 	if !a.settings.Get().MCPAllowExec {
-		return nil, sshx.ExecResult{}, errors.New("running commands is disabled: the user must turn on 「允许 AI 执行命令」 in czlterm → 设置 → MCP")
+		return nil, sshx.ExecResult{}, errors.New("running commands is disabled: the user must turn on 'Allow AI to run commands' (允许 AI 执行命令) in czlterm → Settings → MCP")
 	}
 	if strings.TrimSpace(in.Command) == "" {
 		return nil, sshx.ExecResult{}, errors.New("command is empty")
@@ -223,7 +223,7 @@ func (a *App) mcpTarget(name string) (conn.Connection, []sshx.Hop, error) {
 		return c, nil, fmt.Errorf("connection %q is %s, only ssh connections support files and commands", c.Name, c.Protocol)
 	}
 	if !a.settings.Get().MCPAllowAccess {
-		return c, nil, errors.New("server access is off: the user must turn on 「允许 AI 访问服务器」 in czlterm → 设置 → MCP")
+		return c, nil, errors.New("server access is off: the user must turn on 'Allow AI to access servers' (允许 AI 访问服务器) in czlterm → Settings → MCP")
 	}
 	hops, err := a.resolveChain(c)
 	if errors.Is(err, vault.ErrLocked) {

@@ -1,3 +1,6 @@
+import { getLocale, t } from "@/lib/i18n";
+import { englishErrors } from "@/lib/i18n-errors";
+
 /**
  * 后端错误串的格式是 "<四位数字码> <英文说明>"。这里把码映射成界面上的人话, 并保留码供报障。
  * 未登记的码回落为原始英文说明, 不吞掉。
@@ -69,8 +72,8 @@ export function parseError(e: unknown): { code: string; raw: string } {
 /** 给界面展示的错误文案, 带上错误码。 */
 export function errorText(e: unknown): string {
   const { code, raw } = parseError(e);
-  if (!code) return raw || "未知错误";
-  const known = messages[code];
+  if (!code) return raw || t("未知错误");
+  const known = getLocale() === "en" ? englishErrors[code] : messages[code];
   // 文件操作类错误的原始说明里有 "not found" / "permission denied" 等关键信息, 一并带上。
   if (known) return `${known} (${code})`;
   return `${raw} (${code})`;

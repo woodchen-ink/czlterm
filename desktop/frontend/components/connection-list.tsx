@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useMemo, useState } from "react";
 import { ChevronRightIcon, FolderIcon } from "lucide-react";
 
@@ -45,6 +48,7 @@ export function ConnectionList({
   onSelect: (id: string) => void;
   actions: ConnectionActions;
 }) {
+  useLanguage();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const groups = useMemo(() => {
@@ -63,10 +67,10 @@ export function ConnectionList({
   }, [items, query]);
 
   if (items.length === 0) {
-    return <p className="text-muted-foreground px-4 py-6 text-center text-sm">还没有连接, 点上方 + 新建</p>;
+    return <p className="text-muted-foreground px-4 py-6 text-center text-sm">{t("还没有连接, 点上方 + 新建")}</p>;
   }
   if (groups.length === 0) {
-    return <p className="text-muted-foreground px-4 py-6 text-center text-sm">没有匹配的连接</p>;
+    return <p className="text-muted-foreground px-4 py-6 text-center text-sm">{t("没有匹配的连接")}</p>;
   }
 
   return (
@@ -121,6 +125,7 @@ function ConnectionRow({
   onSelect: () => void;
   actions: ConnectionActions;
 }) {
+  useLanguage();
   const target = c.username ? `${c.username}@${c.host}` : c.host;
   return (
     <ContextMenu>
@@ -149,11 +154,11 @@ function ConnectionRow({
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onSelect={() => actions.connect(c)}>连接</ContextMenuItem>
-        {c.protocol === "ssh" && <ContextMenuItem onSelect={() => actions.openFiles(c)}>文件</ContextMenuItem>}
+        <ContextMenuItem onSelect={() => actions.connect(c)}>{t("连接")}</ContextMenuItem>
+        {c.protocol === "ssh" && <ContextMenuItem onSelect={() => actions.openFiles(c)}>{t("文件")}</ContextMenuItem>}
         {c.protocol === "ssh" && (
           <ContextMenuSub>
-            <ContextMenuSubTrigger>运行脚本</ContextMenuSubTrigger>
+            <ContextMenuSubTrigger>{t("运行脚本")}</ContextMenuSubTrigger>
             <ContextMenuSubContent className="czl-scroll max-h-80 overflow-y-auto">
               {scripts.map((s) => (
                 <ContextMenuItem key={s.id} onSelect={() => actions.runScript(c, s)}>
@@ -161,17 +166,16 @@ function ConnectionRow({
                 </ContextMenuItem>
               ))}
               {scripts.length > 0 && <ContextMenuSeparator />}
-              <ContextMenuItem onSelect={actions.manageScripts}>管理脚本…</ContextMenuItem>
+              <ContextMenuItem onSelect={actions.manageScripts}>{t("管理脚本…")}</ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => actions.edit(c)}>编辑</ContextMenuItem>
-        <ContextMenuItem onSelect={() => actions.duplicate(c)}>复制</ContextMenuItem>
+        <ContextMenuItem onSelect={() => actions.edit(c)}>{t("编辑")}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => actions.duplicate(c)}>{t("复制")}</ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => actions.remove(c)}>
-          删除
-        </ContextMenuItem>
+          {t("删除")}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

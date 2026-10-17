@@ -1,5 +1,7 @@
 /** 纯展示层格式化。 */
 
+import { t } from "@/lib/i18n";
+
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   const units = ["KB", "MB", "GB", "TB"];
@@ -41,7 +43,7 @@ export function formatDuration(sec: number): string {
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  if (d > 0) return `${d} 天 ${h} 小时`;
-  if (h > 0) return `${h} 小时 ${m} 分`;
-  return `${m} 分`;
+  if (d > 0) return t("{0} 天 {1} 小时", d, h);
+  if (h > 0) return t("{0} 小时 {1} 分", h, m);
+  return t("{0} 分", m);
 }

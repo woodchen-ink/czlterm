@@ -50,7 +50,7 @@ jobs:
           # embed 需要导出目录存在; 绑定生成会编译 main 包。
           mkdir -p frontend/out && touch frontend/out/index.html
           "$(go env GOPATH)/bin/wails" generate module
-          cd frontend && pnpm install --frozen-lockfile && pnpm run typecheck && pnpm run lint
+          cd frontend && pnpm install --frozen-lockfile && pnpm run typecheck && pnpm run lint && pnpm test
 
   windows:
     needs: test

@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +29,7 @@ export function PromptDialog({ request, onClose }: { request: PromptRequest | nu
 }
 
 function PromptForm({ request, onClose }: { request: PromptRequest; onClose: () => void }) {
+  useLanguage();
   const [value, setValue] = useState(request.initial);
   const [busy, setBusy] = useState(false);
 
@@ -51,8 +55,8 @@ function PromptForm({ request, onClose }: { request: PromptRequest; onClose: () 
       </form>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>
-          取消
-        </Button>
+          {t("取消")}
+          </Button>
         <Button type="submit" form="prompt-form" disabled={busy || !value.trim()}>
           {request.confirm}
         </Button>

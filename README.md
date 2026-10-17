@@ -9,6 +9,7 @@ A lightweight connection manager. SSH, RDP and VNC open in the clients you alrea
 - **File manager**: browse, upload, download, rename and delete over SFTP; double-click a file to open it in VS Code (or your editor of choice), and it is uploaded back when you save
 - **MCP**: AI clients can list your connections and, on servers you allow, read and write files and run commands
 - **Sync**: each connection is one JSON file (no secrets), synced through git to your own private repository. Optionally set a username and key (an access token for HTTPS, a private key for SSH, stored in the system keychain); otherwise git's own authentication is used
+- **English and Chinese UI**: follows the system language by default, switchable in Settings → General
 - **Machine info**: after each SSH connection, OS, kernel, CPU, memory, disk and uptime are collected in the background and shown on the overview page; the connection list shows the matching OS logo
 - Built with Go and Wails; the UI runs in the system WebView, no bundled browser engine
 
@@ -25,7 +26,7 @@ A lightweight connection manager. SSH, RDP and VNC open in the clients you alrea
 | ![Sync settings](docs/screenshots/settings-sync.webp) | ![About and updates](docs/screenshots/settings-about.webp) |
 | Git sync to your own private repo, optional username and key | Built-in updates, verified against SHA-256 before installing |
 
-(The UI is currently in Chinese.)
+(Screenshots show the Chinese UI; English is also available.)
 
 ## Install
 

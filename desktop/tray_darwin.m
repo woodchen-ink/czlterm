@@ -98,3 +98,13 @@ void czlActivateApp(void) {
         [NSApp activateIgnoringOtherApps:YES];
     });
 }
+
+// 跟随界面语言刷新本应用定义的菜单，所有 AppKit 操作都在主线程执行。
+void czlTrayLanguage(int english) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSMenu *menu = [czlStatusItem menu];
+        if ([menu numberOfItems] < 3) return;
+        [[menu itemAtIndex:0] setTitle:english ? @"Open czlterm" : @"打开 czlterm"];
+        [[menu itemAtIndex:2] setTitle:english ? @"Quit czlterm" : @"退出 czlterm"];
+    });
+}

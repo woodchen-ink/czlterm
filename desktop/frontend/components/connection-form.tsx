@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useState } from "react";
 import { Loader2Icon } from "lucide-react";
 
@@ -31,6 +34,7 @@ export function ConnectionForm({
   onOpenChange: (open: boolean) => void;
   onSaved: (c: Connection) => void;
 }) {
+  useLanguage();
   // 父组件每次打开时换 key 重新挂载, 初始值只在挂载时读取。
   const [form, setForm] = useState<Connection | null>(() => (initial ? { ...initial } : null));
   const [names, setNames] = useState(() => {
@@ -54,7 +58,7 @@ export function ConnectionForm({
       const saved = await api.SaveConnection({ ...form, port: Number(form.port) || 0 });
       onSaved(saved);
     } catch (err) {
-      setError(errorText(err));
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -64,11 +68,11 @@ export function ConnectionForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{form.id ? "编辑连接" : "新建连接"}</DialogTitle>
+          <DialogTitle>{form.id ? t("编辑连接") : t("新建连接")}</DialogTitle>
         </DialogHeader>
         <form id="conn-form" onSubmit={submit} className="czl-scroll -mx-1 max-h-[65vh] space-y-3 overflow-y-auto px-1">
           <div className="grid grid-cols-[7rem_1fr] gap-2">
-            <Field label="协议">
+            <Field label={t("协议")}>
               <Select value={proto} onValueChange={(v) => setForm((f) => (f ? { ...f, protocol: v, port: 0 } : f))}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -80,16 +84,16 @@ export function ConnectionForm({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="名称">
-              <Input value={form.name} placeholder="默认用主机地址" onChange={(e) => set("name", e.target.value)} />
+            <Field label={t("名称")}>
+              <Input value={form.name} placeholder={t("默认用主机地址")} onChange={(e) => set("name", e.target.value)} />
             </Field>
           </div>
 
           <div className="grid grid-cols-[1fr_6rem] gap-2">
-            <Field label="主机">
-              <Input value={form.host} required placeholder="example.com 或 10.0.0.5" onChange={(e) => set("host", e.target.value)} />
+            <Field label={t("主机")}>
+              <Input value={form.host} required placeholder={t("example.com 或 10.0.0.5")} onChange={(e) => set("host", e.target.value)} />
             </Field>
-            <Field label="端口">
+            <Field label={t("端口")}>
               <Input
                 inputMode="numeric"
                 value={form.port || ""}
@@ -100,11 +104,11 @@ export function ConnectionForm({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Field label="用户名">
-              <Input value={form.username} placeholder="留空则用条目里的用户名" onChange={(e) => set("username", e.target.value)} />
+            <Field label={t("用户名")}>
+              <Input value={form.username} placeholder={t("留空则用条目里的用户名")} onChange={(e) => set("username", e.target.value)} />
             </Field>
-            <Field label="分组">
-              <Input list="conn-groups" value={form.group} placeholder="如 生产/数据库" onChange={(e) => set("group", e.target.value)} />
+            <Field label={t("分组")}>
+              <Input list="conn-groups" value={form.group} placeholder={t("如 生产/数据库")} onChange={(e) => set("group", e.target.value)} />
               <datalist id="conn-groups">
                 {groups.map((g) => (
                   <option key={g} value={g} />
@@ -113,21 +117,21 @@ export function ConnectionForm({
             </Field>
           </div>
 
-          <Field label="凭据">
+          <Field label={t("凭据")}>
             <Select value={form.auth} onValueChange={(v) => set("auth", v)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="system">{proto === "ssh" ? "系统默认 (~/.ssh、系统 agent)" : "不提供, 手动输入"}</SelectItem>
-                <SelectItem value="vault">Vaultwarden 条目</SelectItem>
+                <SelectItem value="system">{proto === "ssh" ? t("系统默认 (~/.ssh、系统 agent)") : t("不提供, 手动输入")}</SelectItem>
+                <SelectItem value="vault">{t("Vaultwarden 条目")}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
 
           {form.auth === "vault" && (
             <div className="bg-secondary/50 space-y-3 rounded-md p-3">
-              <Field label="密码条目">
+              <Field label={t("密码条目")}>
                 <VaultItemPicker
                   kind="password"
                   value={form.vaultItem}
@@ -139,7 +143,7 @@ export function ConnectionForm({
                 />
               </Field>
               {proto === "ssh" && (
-                <Field label="私钥条目" hint="SSH 密钥条目; 有口令时在条目里加 passphrase 字段">
+                <Field label={t("私钥条目")} hint={t("SSH 密钥条目; 有口令时在条目里加 passphrase 字段")}>
                   <VaultItemPicker
                     kind="key"
                     value={form.keyItem}
@@ -156,13 +160,13 @@ export function ConnectionForm({
 
           {proto === "ssh" && (
             <>
-              <Field label="跳板机">
+              <Field label={t("跳板机")}>
                 <Select value={form.jump || NO_JUMP} onValueChange={(v) => set("jump", v === NO_JUMP ? "" : v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_JUMP}>不使用</SelectItem>
+                    <SelectItem value={NO_JUMP}>{t("不使用")}</SelectItem>
                     {jumpCandidates.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.group ? `${c.group} / ${c.name}` : c.name}
@@ -174,18 +178,18 @@ export function ConnectionForm({
             </>
           )}
 
-          <Field label="备注">
+          <Field label={t("备注")}>
             <Textarea rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {error && <p className="text-destructive text-sm">{errorText(error)}</p>}
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
+            {t("取消")}
+            </Button>
           <Button type="submit" form="conn-form" disabled={busy}>
-            {busy && <Loader2Icon className="animate-spin" />} 保存
-          </Button>
+            {busy && <Loader2Icon className="animate-spin" />} {t("保存")}
+            </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

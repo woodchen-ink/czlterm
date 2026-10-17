@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test lib/i18n.test.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

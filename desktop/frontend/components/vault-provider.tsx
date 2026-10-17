@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -33,6 +36,7 @@ export class UnlockCancelled extends Error {
 }
 
 export function VaultProvider({ children }: { children: React.ReactNode }) {
+  useLanguage();
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [open, setOpen] = useState(false);
   // 同一时间可能有多个操作在等解锁, 解锁一次后全部继续。
@@ -53,7 +57,7 @@ export function VaultProvider({ children }: { children: React.ReactNode }) {
       .catch(() => {});
     const offLocked = onEvent(Events.vaultLocked, () => {
       void refreshStatus();
-      toast.info("保险库已锁定");
+      toast.info(t("保险库已锁定"));
     });
     // 「记住解锁」在启动后台恢复会话, 成功时刷新状态。
     const offUnlocked = onEvent(Events.vaultUnlocked, () => void refreshStatus());

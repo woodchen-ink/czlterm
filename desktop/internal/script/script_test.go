@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -50,7 +51,7 @@ func TestRemoteCommand(t *testing.T) {
 	}
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out")
-	content := "#!/bin/sh\necho \"it's $((1+2))\" > " + out + "\nexit 3\n"
+	content := "#!/bin/sh\necho \"it's $((1+2))\" > " + strconv.Quote(out) + "\nexit 3\n"
 	cmd, err := RemoteCommand(content)
 	if err != nil {
 		t.Fatal(err)

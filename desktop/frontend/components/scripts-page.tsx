@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useMemo, useState } from "react";
 import { ArrowLeftIcon, FileCode2Icon, Loader2Icon, PlayIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -46,6 +49,7 @@ export function ScriptsPage({
   onChanged: () => Promise<void>;
   onRun: (c: ConnectionView, s: Script) => Promise<void>;
 }) {
+  useLanguage();
   const [query, setQuery] = useState("");
   // saved 是编辑器对应的已保存版本, 新建时为空脚本; form 是编辑中的内容。
   const [saved, setSaved] = useState<Script>(() => scripts[0] ?? emptyScript());
@@ -107,7 +111,7 @@ export function ScriptsPage({
       await onChanged();
       return s;
     } catch (e) {
-      setError(errorText(e));
+      setError(e instanceof Error ? e.message : String(e));
       return null;
     }
   }
@@ -149,9 +153,9 @@ export function ScriptsPage({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
         <Button variant="ghost" size="sm" onClick={() => go({ kind: "close" })}>
-          <ArrowLeftIcon /> 返回
-        </Button>
-        <h1 className="text-sm font-semibold">脚本</h1>
+          <ArrowLeftIcon /> {t("返回")}
+          </Button>
+        <h1 className="text-sm font-semibold">{t("脚本")}</h1>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -159,16 +163,18 @@ export function ScriptsPage({
           <div className="flex shrink-0 items-center gap-1 p-2">
             <div className="relative min-w-0 flex-1">
               <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-              <Input className="h-7 pl-7 text-sm" placeholder="搜索脚本" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <Input className="h-7 pl-7 text-sm" placeholder={t("搜索脚本")} value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
-            <Button variant="ghost" size="icon-sm" aria-label="新建脚本" onClick={() => go({ kind: "new" })}>
+            <Button variant="ghost" size="icon-sm" aria-label={t("新建脚本")} onClick={() => go({ kind: "new" })}>
               <PlusIcon />
             </Button>
           </div>
           <div className="czl-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1 pb-2">
-            {scripts.length === 0 && <p className="text-muted-foreground px-3 py-6 text-center text-sm">还没有脚本</p>}
+            {scripts.length === 0 && <p className="text-muted-foreground px-3 py-6 text-center text-sm">{t("还没有脚本")}
+            </p>}
             {scripts.length > 0 && filtered.length === 0 && (
-              <p className="text-muted-foreground px-3 py-6 text-center text-sm">没有匹配的脚本</p>
+              <p className="text-muted-foreground px-3 py-6 text-center text-sm">{t("没有匹配的脚本")}
+              </p>
             )}
             {filtered.map((s, i) => {
               // 列表已按分组排序, 分组变化处插一个组标题。
@@ -199,16 +205,16 @@ export function ScriptsPage({
           onSubmit={(e) => {
             e.preventDefault();
             void exclusive(async () => {
-              if (await persist()) toast.success("脚本已保存");
+              if (await persist()) toast.success(t("脚本已保存"));
             });
           }}
         >
           <div className="grid shrink-0 grid-cols-2 gap-2">
-            <Field label="名称">
-              <Input value={form.name} placeholder="如 重启 nginx" onChange={(e) => set("name", e.target.value)} />
+            <Field label={t("名称")}>
+              <Input value={form.name} placeholder={t("如 重启 nginx")} onChange={(e) => set("name", e.target.value)} />
             </Field>
-            <Field label="分组">
-              <Input list="script-groups" value={form.group} placeholder="可选" onChange={(e) => set("group", e.target.value)} />
+            <Field label={t("分组")}>
+              <Input list="script-groups" value={form.group} placeholder={t("可选")} onChange={(e) => set("group", e.target.value)} />
               <datalist id="script-groups">
                 {groups.map((g) => (
                   <option key={g} value={g} />
@@ -216,11 +222,11 @@ export function ScriptsPage({
               </datalist>
             </Field>
           </div>
-          <Field label="备注">
-            <Input value={form.notes} placeholder="可选" onChange={(e) => set("notes", e.target.value)} />
+          <Field label={t("备注")}>
+            <Input value={form.notes} placeholder={t("可选")} onChange={(e) => set("notes", e.target.value)} />
           </Field>
           <div className="flex min-h-0 flex-1 flex-col gap-1">
-            <Label className="text-muted-foreground text-xs">脚本内容</Label>
+            <Label className="text-muted-foreground text-xs">{t("脚本内容")}</Label>
             <Textarea
               className="czl-scroll min-h-40 flex-1 resize-none font-mono text-xs"
               spellCheck={false}
@@ -229,24 +235,23 @@ export function ScriptsPage({
               onChange={(e) => set("content", e.target.value)}
             />
             <p className="text-muted-foreground text-xs">
-              在终端里连上服务器后执行, 结束后留在 shell 中; 默认用 sh 执行, 首行写 #!/bin/bash 可换解释器
-              {saved.updatedAt && ` · 更新于 ${formatTime(saved.updatedAt)}`}
+              {t("在终端里连上服务器后执行, 结束后留在 shell 中; 默认用 sh 执行, 首行写 #!/bin/bash 可换解释器")}{saved.updatedAt && t(" · 更新于 {0}", formatTime(saved.updatedAt))}
             </p>
           </div>
-          {error && <p className="text-destructive shrink-0 text-sm">{error}</p>}
+          {error && <p className="text-destructive shrink-0 text-sm">{errorText(error)}</p>}
         </form>
       </div>
 
       <div className="flex shrink-0 items-center gap-2 border-t px-4 py-2">
         {saved.id && (
           <Button variant="ghost" className="text-destructive" onClick={() => setRemoving(true)}>
-            <Trash2Icon /> 删除
-          </Button>
+            <Trash2Icon /> {t("删除")}
+            </Button>
         )}
         <div className="ml-auto flex items-center gap-2">
           <Select value={connId} onValueChange={setConnId} disabled={sshConns.length === 0}>
             <SelectTrigger className="w-56">
-              <SelectValue placeholder="没有 SSH 连接" />
+              <SelectValue placeholder={t("没有 SSH 连接")} />
             </SelectTrigger>
             <SelectContent>
               {sshConns.map((c) => (
@@ -257,22 +262,22 @@ export function ScriptsPage({
             </SelectContent>
           </Select>
           <Button variant="outline" onClick={run} disabled={busy || !connId}>
-            <PlayIcon /> 运行
-          </Button>
+            <PlayIcon /> {t("运行")}
+            </Button>
           <Button type="submit" form="script-form" disabled={busy || !dirty}>
-            {busy && <Loader2Icon className="animate-spin" />} 保存
-          </Button>
+            {busy && <Loader2Icon className="animate-spin" />} {t("保存")}
+            </Button>
         </div>
       </div>
 
       <AlertDialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>放弃未保存的修改?</AlertDialogTitle>
-            <AlertDialogDescription>当前脚本有修改尚未保存。</AlertDialogDescription>
+            <AlertDialogTitle>{t("放弃未保存的修改?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("当前脚本有修改尚未保存。")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>继续编辑</AlertDialogCancel>
+            <AlertDialogCancel>{t("继续编辑")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 const p = pending;
@@ -280,20 +285,21 @@ export function ScriptsPage({
                 if (p) go(p, true);
               }}
             >
-              放弃修改
-            </AlertDialogAction>
+              {t("放弃修改")}
+              </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={removing} onOpenChange={setRemoving}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除脚本 {saved.name}?</AlertDialogTitle>
-            <AlertDialogDescription>开启同步时其它设备上的这个脚本也会被删除。</AlertDialogDescription>
+            <AlertDialogTitle>{t("删除脚本 {0}?", saved.name)}</AlertDialogTitle>
+            <AlertDialogDescription>{t("开启同步时其它设备上的这个脚本也会被删除。")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={remove}>删除</AlertDialogAction>
+            <AlertDialogCancel>{t("取消")}</AlertDialogCancel>
+            <AlertDialogAction onClick={remove}>{t("删除")}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

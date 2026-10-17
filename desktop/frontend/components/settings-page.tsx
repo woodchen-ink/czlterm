@@ -1,5 +1,8 @@
 "use client";
 
+import { normalizeLanguage, setLanguage, t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useEffect, useState } from "react";
 import {
   ArrowLeftIcon,
@@ -8,6 +11,7 @@ import {
   FolderOpenIcon,
   GitBranchIcon,
   InfoIcon,
+  LanguagesIcon,
   KeyRoundIcon,
   Loader2Icon,
   RefreshCwIcon,
@@ -20,16 +24,17 @@ import { useVault } from "@/components/vault-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { api, openExternal, type MCPConfig, type Settings, type SettingsView } from "@/lib/api";
 import { errorText } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
-export type SettingsTab = "apps" | "vault" | "sync" | "mcp" | "about";
+export type SettingsTab = "general" | "apps" | "vault" | "sync" | "mcp" | "about";
 
 const sections: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "general", label: "通用", icon: LanguagesIcon },
   { id: "apps", label: "外部程序", icon: SquareTerminalIcon },
   { id: "vault", label: "保险库", icon: KeyRoundIcon },
   { id: "sync", label: "同步", icon: GitBranchIcon },
@@ -39,7 +44,7 @@ const sections: { id: SettingsTab; label: string; icon: React.ComponentType<{ cl
 
 /** 整页设置: 左侧分区导航, 右侧内容独立滚动, 底部保存条固定。 */
 export function SettingsPage({
-  initialTab = "apps",
+  initialTab = "general",
   onClose,
   onSaved,
 }: {
@@ -48,6 +53,7 @@ export function SettingsPage({
   /** syncing 为 true 表示改了同步仓库或认证, 后端已安排一次同步。 */
   onSaved: (syncing: boolean) => void;
 }) {
+  const language = useLanguage();
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [view, setView] = useState<SettingsView | null>(null);
   const [form, setForm] = useState<Settings | null>(null);
@@ -84,7 +90,7 @@ export function SettingsPage({
       const syncing =
         !!form.gitRemote &&
         (form.gitRemote !== prev?.gitRemote || form.gitUsername !== prev?.gitUsername || secretChanged);
-      toast.success(syncing ? "设置已保存, 正在同步仓库…" : "设置已保存");
+      toast.success(syncing ? t("设置已保存, 正在同步仓库…") : t("设置已保存"));
       onSaved(syncing);
       onClose();
     } catch (e) {
@@ -96,8 +102,8 @@ export function SettingsPage({
 
   function copy(text: string) {
     navigator.clipboard.writeText(text).then(
-      () => toast.success("已复制"),
-      () => toast.error("复制失败"),
+      () => toast.success(t("已复制")),
+      () => toast.error(t("复制失败")),
     );
   }
 
@@ -105,9 +111,9 @@ export function SettingsPage({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
         <Button variant="ghost" size="sm" onClick={onClose}>
-          <ArrowLeftIcon /> 返回
-        </Button>
-        <h1 className="text-sm font-semibold">设置</h1>
+          <ArrowLeftIcon /> {t("返回")}
+          </Button>
+        <h1 className="text-sm font-semibold">{t("设置")}</h1>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -123,13 +129,28 @@ export function SettingsPage({
               )}
             >
               <s.icon className="size-4" />
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </nav>
 
         <div className="czl-scroll min-w-0 flex-1 overflow-y-auto">
-          {!view || !form ? (
+          {tab === "general" ? (
+            <div className="mx-auto flex max-w-2xl flex-col gap-5 p-6">
+              <Field label={t("语言 / Language")} hint={t("立即生效，仅保存在本机")}>
+                <Select value={language} onValueChange={(value) => setLanguage(normalizeLanguage(value))}>
+                  <SelectTrigger className="w-full" aria-label={t("语言 / Language")}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="system">{t("跟随系统")}</SelectItem>
+                      <SelectItem value="zh-CN">简体中文</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          ) : !view || !form ? (
             <div className="text-muted-foreground flex h-full items-center justify-center">
               <Loader2Icon className="animate-spin" />
             </div>
@@ -137,47 +158,46 @@ export function SettingsPage({
             <div className="mx-auto max-w-2xl space-y-5 p-6">
               {tab === "apps" && (
                 <>
-                  <Field label="终端" hint="SSH 连接在这里打开">
+                  <Field label={t("终端")} hint={t("SSH 连接在这里打开")}>
                     <Select value={form.terminal} onValueChange={(v) => set("terminal", v)}>
                       <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {view.terminals.map((t) => (
-                          <SelectItem key={t.id} value={t.id} disabled={!t.installed}>
-                            {t.name}
-                            {!t.installed && " (未安装)"}
+                        {view.terminals.map((terminal) => (
+                          <SelectItem key={terminal.id} value={terminal.id} disabled={!terminal.installed}>
+                            {terminal.name}
+                            {!terminal.installed && t(" (未安装)")}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="编辑器" hint="在文件管理中编辑远程文件时使用, 保存后自动上传">
+                  <Field label={t("编辑器")} hint={t("在文件管理中编辑远程文件时使用, 保存后自动上传")}>
                     <Select value={form.editor} onValueChange={(v) => set("editor", v)}>
                       <SelectTrigger className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {view.editors.map((t) => (
-                          <SelectItem key={t.id} value={t.id} disabled={!t.installed}>
-                            {t.name}
-                            {!t.installed && " (未安装)"}
+                        {view.editors.map((editor) => (
+                          <SelectItem key={editor.id} value={editor.id} disabled={!editor.installed}>
+                            {editor.name}
+                            {!editor.installed && t(" (未安装)")}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="自定义编辑器路径" hint="填写后忽略上面的选择">
-                    <Input value={form.editorPath} placeholder="可留空" onChange={(e) => set("editorPath", e.target.value)} />
+                  <Field label={t("自定义编辑器路径")} hint={t("填写后忽略上面的选择")}>
+                    <Input value={form.editorPath} placeholder={t("可留空")} onChange={(e) => set("editorPath", e.target.value)} />
                   </Field>
                   <p className="text-muted-foreground text-sm">
-                    RDP 使用
-                    {view.os === "darwin"
-                      ? " Windows App (App Store)。它不接受外部传入的密码, 连接时密码复制到剪贴板, 45 秒后清除。"
-                      : "系统远程桌面 (mstsc), 密码自动填入。"}
+                    {t("RDP 使用")}{view.os === "darwin"
+                      ? t(" Windows App (App Store)。它不接受外部传入的密码, 连接时密码复制到剪贴板, 45 秒后清除。")
+                      : t("系统远程桌面 (mstsc), 密码自动填入。")}
                   </p>
                   {view.os !== "darwin" && (
-                    <Field label="VNC 查看器路径" hint="留空时自动查找 TigerVNC; 其它查看器无法自动填密码, 会改用剪贴板">
+                    <Field label={t("VNC 查看器路径")} hint={t("留空时自动查找 TigerVNC; 其它查看器无法自动填密码, 会改用剪贴板")}>
                       <Input
                         value={form.vncViewerPath}
                         placeholder="C:\Program Files\TigerVNC\vncviewer.exe"
@@ -187,10 +207,10 @@ export function SettingsPage({
                   )}
                   <div className="border-t pt-5">
                     <ToggleRow
-                      label="显示服务器国旗"
+                      label={t("显示服务器国旗")}
                       hint={
                         <>
-                          仅用于获取服务器国家信息, 不会收集 IP, 查询源为{" "}
+                          {t("仅用于获取服务器国家信息, 不会收集 IP, 查询源为")}{" "}
                           <button
                             type="button"
                             className="text-primary underline-offset-2 hover:underline"
@@ -214,7 +234,7 @@ export function SettingsPage({
                 <>
                   <div className="bg-secondary space-y-1 rounded-md p-3 text-sm break-all">
                     <p>
-                      状态: <span className="font-medium">{status?.status ?? "未知"}</span>
+                      {t("状态:")}<span className="font-medium">{status?.status ?? t("未知")}</span>
                       {status?.userEmail && ` · ${status.userEmail}`}
                     </p>
                     {status?.serverUrl && <p className="text-muted-foreground text-xs">{status.serverUrl}</p>}
@@ -227,25 +247,25 @@ export function SettingsPage({
                         className="mt-2"
                         onClick={() =>
                           api.VaultRefresh().then(
-                            () => toast.success("已从服务器同步保险库"),
+                            () => toast.success(t("已从服务器同步保险库")),
                             (e) => toast.error(errorText(e)),
                           )
                         }
                       >
-                        <RefreshCwIcon /> 从服务器同步条目
-                      </Button>
+                        <RefreshCwIcon /> {t("从服务器同步条目")}
+                        </Button>
                     )}
                   </div>
-                  <Field label="bw 路径" hint="留空时在 PATH 中查找">
+                  <Field label={t("bw 路径")} hint={t("留空时在 PATH 中查找")}>
                     <Input value={form.bwPath} placeholder="/opt/homebrew/bin/bw" onChange={(e) => set("bwPath", e.target.value)} />
                   </Field>
                   <ToggleRow
-                    label="记住解锁"
-                    hint="把 bw 会话密钥存进系统钥匙串, 重启 czlterm 不用再输主密码; 手动锁定或空闲超时锁定时会一并清除"
+                    label={t("记住解锁")}
+                    hint={t("把 bw 会话密钥存进系统钥匙串, 重启 czlterm 不用再输主密码; 手动锁定或空闲超时锁定时会一并清除")}
                     checked={form.vaultRemember}
                     onChange={(v) => set("vaultRemember", v)}
                   />
-                  <Field label="空闲自动锁定 (分钟)" hint="0 表示直到退出程序">
+                  <Field label={t("空闲自动锁定 (分钟)")} hint={t("0 表示直到退出程序")}>
                     <Input
                       inputMode="numeric"
                       value={form.vaultAutoLockMinutes}
@@ -258,17 +278,17 @@ export function SettingsPage({
               {tab === "sync" && (
                 <>
                   <p className="text-muted-foreground text-sm">
-                    连接配置 (不含任何密码) 存放在数据目录, 一连接一个 JSON 文件, 用 git 同步到你自己的私有仓库。
-                  </p>
-                  <Field label="仓库地址" hint="如 git@github.com:you/czlterm-data.git 或 https://…; 留空则只做本地提交">
+                    {t("连接配置 (不含任何密码) 存放在数据目录, 一连接一个 JSON 文件, 用 git 同步到你自己的私有仓库。")}
+                    </p>
+                  <Field label={t("仓库地址")} hint={t("如 git@github.com:you/czlterm-data.git 或 https://…; 留空则只做本地提交")}>
                     <Input value={form.gitRemote} onChange={(e) => set("gitRemote", e.target.value)} />
                   </Field>
-                  <Field label="用户名 (可选)" hint="HTTPS 仓库使用; SSH 仓库的用户名写在地址里。留空用 git 默认认证">
+                  <Field label={t("用户名 (可选)")} hint={t("HTTPS 仓库使用; SSH 仓库的用户名写在地址里。留空用 git 默认认证")}>
                     <Input value={form.gitUsername} autoComplete="off" onChange={(e) => set("gitUsername", e.target.value)} />
                   </Field>
                   <Field
-                    label="密钥 (可选)"
-                    hint="HTTPS 仓库填访问令牌或密码, SSH 仓库粘贴私钥。保存在系统钥匙串, 不写入设置文件; 留空用 git 默认认证"
+                    label={t("密钥 (可选)")}
+                    hint={t("HTTPS 仓库填访问令牌或密码, SSH 仓库粘贴私钥。保存在系统钥匙串, 不写入设置文件; 留空用 git 默认认证")}
                   >
                     <Textarea
                       rows={3}
@@ -277,52 +297,52 @@ export function SettingsPage({
                       spellCheck={false}
                       value={gitSecret}
                       disabled={clearGitSecret}
-                      placeholder={view.hasGitSecret ? "已保存 (留空保持不变)" : "未设置"}
+                      placeholder={view.hasGitSecret ? t("已保存 (留空保持不变)") : t("未设置")}
                       onChange={(e) => setGitSecret(e.target.value)}
                     />
                     {view.hasGitSecret && (
                       <label className="text-muted-foreground flex items-center gap-2 text-xs">
-                        <Switch checked={clearGitSecret} onCheckedChange={setClearGitSecret} /> 清除已保存的密钥
-                      </label>
+                        <Switch checked={clearGitSecret} onCheckedChange={setClearGitSecret} /> {t("清除已保存的密钥")}</label>
                     )}
                   </Field>
-                  <ToggleRow label="修改后自动同步" checked={form.gitAutoSync} onChange={(v) => set("gitAutoSync", v)} />
+                  <ToggleRow label={t("修改后自动同步")} checked={form.gitAutoSync} onChange={(v) => set("gitAutoSync", v)} />
                   <Button variant="outline" size="sm" onClick={() => api.RevealDataDir().catch((e) => toast.error(errorText(e)))}>
-                    <FolderOpenIcon /> 打开数据目录
-                  </Button>
+                    <FolderOpenIcon /> {t("打开数据目录")}
+                    </Button>
                 </>
               )}
 
               {tab === "mcp" && (
                 <>
-                  <ToggleRow label="启用 MCP" hint="在 127.0.0.1 上提供 MCP 端点, 以令牌鉴权; 只开这一项时 AI 只能列出连接" checked={form.mcpEnabled} onChange={(v) => set("mcpEnabled", v)} />
+                  <ToggleRow label={t("启用 MCP")} hint={t("在 127.0.0.1 上提供 MCP 端点, 以令牌鉴权; 只开这一项时 AI 只能列出连接")} checked={form.mcpEnabled} onChange={(v) => set("mcpEnabled", v)} />
                   <ToggleRow
-                    label="允许 AI 访问服务器"
-                    hint="在全部 SSH 连接上列目录、读文件"
+                    label={t("允许 AI 访问服务器")}
+                    hint={t("在全部 SSH 连接上列目录、读文件")}
                     checked={form.mcpAllowAccess}
                     disabled={!form.mcpEnabled}
                     onChange={(v) => set("mcpAllowAccess", v)}
                   />
                   <ToggleRow
-                    label="允许 AI 写文件"
+                    label={t("允许 AI 写文件")}
                     checked={form.mcpAllowWrite}
                     disabled={!form.mcpEnabled || !form.mcpAllowAccess}
                     onChange={(v) => set("mcpAllowWrite", v)}
                   />
                   <ToggleRow
-                    label="允许 AI 执行命令"
-                    hint="支持多行脚本"
+                    label={t("允许 AI 执行命令")}
+                    hint={t("支持多行脚本")}
                     checked={form.mcpAllowExec}
                     disabled={!form.mcpEnabled || !form.mcpAllowAccess}
                     onChange={(v) => set("mcpAllowExec", v)}
                   />
                   {mcp && (
                     <>
-                      <Snippet title="stdio 客户端 (Claude Desktop 等)" text={mcp.stdioJson} onCopy={copy} />
+                      <Snippet title={t("stdio 客户端 (Claude Desktop 等)")} text={mcp.stdioJson} onCopy={copy} />
                       {mcp.httpJson ? (
-                        <Snippet title="HTTP 客户端 (Claude Code 等, 含令牌)" text={mcp.httpJson} onCopy={copy} />
+                        <Snippet title={t("HTTP 客户端 (Claude Code 等, 含令牌)")} text={mcp.httpJson} onCopy={copy} />
                       ) : (
-                        <p className="text-muted-foreground text-xs">启用并保存后显示 HTTP 配置。</p>
+                        <p className="text-muted-foreground text-xs">{t("启用并保存后显示 HTTP 配置。")}
+                        </p>
                       )}
                       {mcp.running && (
                         <Button
@@ -332,14 +352,14 @@ export function SettingsPage({
                             api.RotateMCPToken().then(
                               (c) => {
                                 setMcp(c);
-                                toast.success("令牌已更换, 请更新 HTTP 客户端配置");
+                                toast.success(t("令牌已更换, 请更新 HTTP 客户端配置"));
                               },
                               (e) => toast.error(errorText(e)),
                             )
                           }
                         >
-                          更换令牌
-                        </Button>
+                          {t("更换令牌")}
+                          </Button>
                       )}
                     </>
                   )}
@@ -352,14 +372,14 @@ export function SettingsPage({
         </div>
       </div>
 
-      {tab !== "about" && (
+      {tab !== "about" && tab !== "general" && (
         <div className="flex shrink-0 justify-end gap-2 border-t px-4 py-2">
           <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
+            {t("取消")}
+            </Button>
           <Button onClick={save} disabled={busy || !form}>
-            {busy && <Loader2Icon className="animate-spin" />} 保存
-          </Button>
+            {busy && <Loader2Icon className="animate-spin" />} {t("保存")}
+            </Button>
         </div>
       )}
     </div>
@@ -402,11 +422,12 @@ function ToggleRow({
 
 /** 配置片段: 长路径在框内换行, 不撑宽页面。 */
 function Snippet({ title, text, onCopy }: { title: string; text: string; onCopy: (t: string) => void }) {
+  useLanguage();
   return (
     <div className="min-w-0 space-y-1">
       <div className="flex items-center justify-between">
         <Label className="text-muted-foreground text-xs">{title}</Label>
-        <Button variant="ghost" size="icon-xs" aria-label="复制" onClick={() => onCopy(text)}>
+        <Button variant="ghost" size="icon-xs" aria-label={t("复制")} onClick={() => onCopy(text)}>
           <CopyIcon />
         </Button>
       </div>

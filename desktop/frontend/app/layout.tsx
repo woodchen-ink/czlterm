@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { LanguageProvider } from "@/components/language-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -26,19 +27,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       {/* 主壳锁死视口高度: 侧栏与右侧面板各自内部滚动。 */}
       <body className="h-full overflow-hidden">
-        <TooltipProvider delayDuration={300}>
-          <div className="flex h-full flex-col">
-            {/* 仅 macOS 显示: 给红绿灯让位, 同时作为拖动窗口的把手。 */}
-            <div
-              className="mac-titlebar bg-sidebar border-border text-muted-foreground h-9 shrink-0 items-center justify-center border-b text-xs font-medium select-none"
-              style={{ "--wails-draggable": "drag" } as React.CSSProperties}
-            >
-              czlterm
+        <LanguageProvider>
+          <TooltipProvider delayDuration={300}>
+            <div className="flex h-full flex-col">
+              {/* 仅 macOS 显示: 给红绿灯让位, 同时作为拖动窗口的把手。 */}
+              <div
+                className="mac-titlebar bg-sidebar border-border text-muted-foreground h-9 shrink-0 items-center justify-center border-b text-xs font-medium select-none"
+                style={{ "--wails-draggable": "drag" } as React.CSSProperties}
+              >
+                czlterm
+              </div>
+              <div className="min-h-0 flex-1">{children}</div>
             </div>
-            <div className="min-h-0 flex-1">{children}</div>
-          </div>
-          <Toaster position="bottom-right" />
-        </TooltipProvider>
+            <Toaster position="bottom-right" />
+          </TooltipProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

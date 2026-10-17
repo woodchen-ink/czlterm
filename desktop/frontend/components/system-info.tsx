@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useCallback, useEffect, useState } from "react";
 import { Loader2Icon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +16,7 @@ import { formatBytes, formatDuration, formatTime } from "@/lib/format";
 
 /** 概览页里的机器配置与系统信息。SSH 连接一次后自动采集, 也可手动刷新。 */
 export function SystemInfo({ connId }: { connId: string }) {
+  useLanguage();
   const { withVault } = useVault();
   const [facts, setFacts] = useState<Facts | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,9 +46,9 @@ export function SystemInfo({ connId }: { connId: string }) {
 
   const header = (
     <div className="flex items-center justify-between">
-      <h2 className="text-sm font-semibold">系统信息</h2>
+      <h2 className="text-sm font-semibold">{t("系统信息")}</h2>
       <Button variant="ghost" size="sm" onClick={refresh} disabled={busy}>
-        {busy ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />} {facts?.collectedAt ? "刷新" : "立即采集"}
+        {busy ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />} {facts?.collectedAt ? t("刷新") : t("立即采集")}
       </Button>
     </div>
   );
@@ -53,7 +57,8 @@ export function SystemInfo({ connId }: { connId: string }) {
     return (
       <section className="space-y-2">
         {header}
-        <p className="text-muted-foreground text-sm">连接一次后自动采集系统、CPU、内存与磁盘信息。</p>
+        <p className="text-muted-foreground text-sm">{t("连接一次后自动采集系统、CPU、内存与磁盘信息。")}
+        </p>
       </section>
     );
   }
@@ -72,13 +77,13 @@ export function SystemInfo({ connId }: { connId: string }) {
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="CPU" value={facts.cores ? `${facts.cores} 核` : "—"} sub={facts.cpu} />
-        <Meter label="内存" used={memUsed} total={facts.memoryBytes} />
-        <Meter label="磁盘 /" used={facts.diskUsedBytes} total={facts.diskBytes} />
+        <Stat label="CPU" value={facts.cores ? t("{0} 核", facts.cores) : "—"} sub={facts.cpu} />
+        <Meter label={t("内存")} used={memUsed} total={facts.memoryBytes} />
+        <Meter label={t("磁盘 /")} used={facts.diskUsedBytes} total={facts.diskBytes} />
       </div>
       <p className="text-muted-foreground text-xs">
-        {facts.uptimeSeconds ? `已运行 ${formatDuration(facts.uptimeSeconds)} · ` : ""}
-        {facts.load ? `负载 ${facts.load} · ` : ""}采集于 {formatTime(facts.collectedAt)}
+        {facts.uptimeSeconds ? t("已运行 {0} · ", formatDuration(facts.uptimeSeconds)) : ""}
+        {facts.load ? t("负载 {0} · ", facts.load) : ""}{t("采集于 {0}", formatTime(facts.collectedAt))}
       </p>
     </section>
   );
@@ -95,6 +100,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 function Meter({ label, used, total }: { label: string; used: number; total: number }) {
+  useLanguage();
   const pct = total && used ? Math.min(100, Math.round((used / total) * 100)) : 0;
   return (
     <div className="min-w-0 rounded-lg border p-3">
@@ -106,7 +112,7 @@ function Meter({ label, used, total }: { label: string; used: number; total: num
             <div className={pct >= 90 ? "bg-destructive h-full" : "bg-accent h-full"} style={{ width: `${pct}%` }} />
           </div>
           <p className="text-muted-foreground mt-1 text-xs tabular-nums">
-            已用 {formatBytes(used)} · {pct}%
+            {t("已用 {0} · {1}%", formatBytes(used), pct)}
           </p>
         </>
       )}

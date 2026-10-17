@@ -97,7 +97,7 @@ func waitForMCP(ctx context.Context) (Info, error) {
 			return info, nil
 		}
 		if time.Now().After(deadline) {
-			return Info{}, errors.New("czlterm is not running or MCP is disabled; start czlterm and enable it in 设置 → MCP")
+			return Info{}, errors.New("czlterm is not running or MCP is disabled; start czlterm and enable it in Settings → MCP")
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

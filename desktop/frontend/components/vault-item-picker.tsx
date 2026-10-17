@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useEffect, useState } from "react";
 import { KeyRoundIcon, LockKeyholeIcon, RefreshCwIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +30,7 @@ export function VaultItemPicker({
   valueName: string;
   onChange: (id: string, item?: VaultItem) => void;
 }) {
+  useLanguage();
   const { withVault } = useVault();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -41,7 +45,7 @@ export function VaultItemPicker({
     try {
       await withVault(() => api.VaultRefresh());
       setReloadKey((k) => k + 1);
-      toast.success("已从服务器同步保险库");
+      toast.success(t("已从服务器同步保险库"));
     } catch (e) {
       if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
     } finally {
@@ -70,7 +74,7 @@ export function VaultItemPicker({
     };
   }, [open, query, kind, withVault, reloadKey]);
 
-  const label = value ? valueName || "已选条目 (保险库锁定中)" : "未选择";
+  const label = value ? valueName || t("已选条目 (保险库锁定中)") : t("未选择");
 
   return (
     <>
@@ -80,7 +84,7 @@ export function VaultItemPicker({
           <span className={cn("truncate", !value && "text-muted-foreground")}>{label}</span>
         </Button>
         {value && (
-          <Button type="button" variant="ghost" size="icon" aria-label="清除" onClick={() => onChange("")}>
+          <Button type="button" variant="ghost" size="icon" aria-label={t("清除")} onClick={() => onChange("")}>
             <XIcon />
           </Button>
         )}
@@ -88,16 +92,16 @@ export function VaultItemPicker({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{kind === "key" ? "选择私钥条目" : "选择密码条目"}</DialogTitle>
+            <DialogTitle>{kind === "key" ? t("选择私钥条目") : t("选择密码条目")}</DialogTitle>
           </DialogHeader>
           <div className="flex gap-1">
-            <Input autoFocus placeholder="搜索名称或用户名" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input autoFocus placeholder={t("搜索名称或用户名")} value={query} onChange={(e) => setQuery(e.target.value)} />
             <Button
               type="button"
               variant="outline"
               size="icon"
-              aria-label="从服务器同步"
-              title="从服务器同步 (找不到刚在 Bitwarden 里新加的条目时点这里)"
+              aria-label={t("从服务器同步")}
+              title={t("从服务器同步 (找不到刚在 Bitwarden 里新加的条目时点这里)")}
               onClick={syncFromServer}
               disabled={syncing}
             >
@@ -120,16 +124,16 @@ export function VaultItemPicker({
               >
                 <span className="truncate text-sm">{it.name}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {[it.username, it.hasKey ? "私钥" : "", it.hasPassword ? "密码" : ""].filter(Boolean).join(" · ")}
+                  {[it.username, it.hasKey ? t("私钥") : "", it.hasPassword ? t("密码") : ""].filter(Boolean).join(" · ")}
                 </span>
               </button>
             ))}
             {!loading && items.length === 0 && (
               <p className="text-muted-foreground px-2 py-6 text-center text-sm">
-                {kind === "key" ? "没有含私钥的条目 (SSH 密钥条目, 或带 private_key 字段的条目)" : "没有含密码的登录条目"}
+                {kind === "key" ? t("没有含私钥的条目 (SSH 密钥条目, 或带 private_key 字段的条目)") : t("没有含密码的登录条目")}
                 <br />
-                刚新加的条目找不到? 点搜索框右边的同步按钮。
-              </p>
+                {t("刚新加的条目找不到? 点搜索框右边的同步按钮。")}
+                </p>
             )}
           </div>
         </DialogContent>

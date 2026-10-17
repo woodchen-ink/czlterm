@@ -9,6 +9,9 @@ func (a *App) startTray() {}
 
 func (a *App) stopTray() {}
 
+// updateTrayLanguage 是无托盘平台的空实现。
+func (a *App) updateTrayLanguage() {}
+
 func (a *App) showWindow() {
 	if a.ctx == nil {
 		return

@@ -1,5 +1,8 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+import { useLanguage } from "@/components/language-provider";
+
 import { useEffect, useState } from "react";
 import { BugIcon, DownloadIcon, Loader2Icon, MessageCircleIcon, RefreshCwIcon, StarIcon, TagIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +14,7 @@ import { formatBytes } from "@/lib/format";
 
 /** 关于: 版本与在线更新, 以及开源项目的推广入口。 */
 export function AboutPanel() {
+  useLanguage();
   const [about, setAbout] = useState<AboutInfo | null>(null);
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
@@ -31,7 +35,7 @@ export function AboutPanel() {
     try {
       const r = await api.CheckForUpdate();
       setInfo(r);
-      if (!r.available) toast.info(r.message || "已是最新版本");
+      if (!r.available) toast.info(t(r.message || "已是最新版本"));
     } catch (e) {
       toast.error(errorText(e));
     } finally {
@@ -43,7 +47,7 @@ export function AboutPanel() {
     setInstalling(true);
     try {
       await api.InstallUpdate();
-      toast.success("正在安装, 完成后自动重新打开");
+      toast.success(t("正在安装, 完成后自动重新打开"));
     } catch (e) {
       toast.error(errorText(e));
       setInstalling(false);
@@ -63,52 +67,54 @@ export function AboutPanel() {
           <img src="/logo.png" alt="" className="size-12" />
           <div>
             <p className="text-base font-semibold">czlterm</p>
-            <p className="text-muted-foreground text-xs">版本 {about.version}</p>
+            <p className="text-muted-foreground text-xs">{t("版本 {0}", about.version)}
+            </p>
           </div>
         </div>
         {rel ? (
           <Button onClick={install} disabled={installing}>
             {installing ? <Loader2Icon className="animate-spin" /> : <DownloadIcon />}
-            {installing && progress?.total ? `下载中 ${Math.round((progress.done / progress.total) * 100)}%` : `更新到 ${rel.version}`}
+            {installing && progress?.total ? t("下载中 {0}%", Math.round((progress.done / progress.total) * 100)) : t("更新到 {0}", rel.version)}
           </Button>
         ) : (
           <Button variant="outline" onClick={check} disabled={checking}>
-            {checking ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />} 检查更新
-          </Button>
+            {checking ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />} {t("检查更新")}
+            </Button>
         )}
       </div>
 
       {rel && (
         <div className="bg-secondary space-y-1 rounded-md p-3 text-sm">
           <p className="font-medium">
-            {rel.version} 已发布{rel.assetSize ? ` · ${formatBytes(rel.assetSize)}` : ""}
+            {t("{0} 已发布", rel.version)}{rel.assetSize ? ` · ${formatBytes(rel.assetSize)}` : ""}
           </p>
           {rel.notes && <p className="text-muted-foreground czl-scroll max-h-40 overflow-y-auto text-xs whitespace-pre-wrap">{rel.notes}</p>}
-          <p className="text-muted-foreground text-xs">安装包下载后先校验 SHA-256, 再替换安装并重新打开。</p>
+          <p className="text-muted-foreground text-xs">{t("安装包下载后先校验 SHA-256, 再替换安装并重新打开。")}
+          </p>
         </div>
       )}
 
       <div className="space-y-3 rounded-md border p-4">
-        <p className="text-sm font-medium">czlterm 是开源项目</p>
-        <p className="text-muted-foreground text-sm">
-          轻量的 SSH / RDP / VNC 连接管理, 凭据直接取自 Vaultwarden, 内置 MCP。代码完全公开, 欢迎使用、反馈与贡献。
-          如果它帮到了你, 去 GitHub 点个 Star, 或者推荐给身边同样在管服务器的朋友, 这是对项目最大的支持。
+        <p className="text-sm font-medium">{t("czlterm 是开源项目")}
         </p>
+        <p className="text-muted-foreground text-sm">
+          {t("轻量的 SSH / RDP / VNC 连接管理, 凭据直接取自 Vaultwarden, 内置 MCP。代码完全公开, 欢迎使用、反馈与贡献。 如果它帮到了你, 去 GitHub 点个 Star, 或者推荐给身边同样在管服务器的朋友, 这是对项目最大的支持。")}
+          </p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={() => openExternal(about.projectUrl)}>
-            <StarIcon /> 在 GitHub 上 Star
-          </Button>
+            <StarIcon /> {t("在 GitHub 上 Star")}
+            </Button>
           {about.forumUrl && (
             <Button size="sm" variant="outline" onClick={() => openExternal(about.forumUrl)}>
-              <MessageCircleIcon /> 论坛讨论帖
-            </Button>
+              <MessageCircleIcon /> {t("论坛讨论帖")}
+              </Button>
           )}
           <Button size="sm" variant="outline" onClick={() => openExternal(about.issuesUrl)}>
-            <BugIcon /> 反馈问题
-          </Button>
+            <BugIcon /> {t("反馈问题")}
+            </Button>
           <Button size="sm" variant="ghost" onClick={() => openExternal(about.releasesUrl)}>
-            <TagIcon /> 更新日志
-          </Button>
+            <TagIcon /> {t("更新日志")}
+            </Button>
         </div>
       </div>
     </div>

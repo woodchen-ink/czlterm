@@ -19,8 +19,8 @@ func appMenu(app *App) *menu.Menu {
 	m.Append(menu.EditMenu())
 	m.Append(menu.WindowMenu())
 	// ⌘W 与点 X 一致: 隐藏到后台, 点 Dock 图标唤回; ⌘Q 由应用菜单提供, 真正退出。
-	m.Append(menu.SubMenu("文件", menu.NewMenuFromItems(
-		menu.Text("关闭窗口", keys.CmdOrCtrl("w"), func(*menu.CallbackData) {
+	m.Append(menu.SubMenu(app.uiText("文件", "File"), menu.NewMenuFromItems(
+		menu.Text(app.uiText("关闭窗口", "Close Window"), keys.CmdOrCtrl("w"), func(*menu.CallbackData) {
 			if app.ctx != nil {
 				wruntime.Hide(app.ctx)
 			}
