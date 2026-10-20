@@ -14,6 +14,7 @@ import (
 
 	"github.com/woodchen-ink/czlterm/desktop/internal/askpass"
 	"github.com/woodchen-ink/czlterm/desktop/internal/gitsync"
+	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/mcpbridge"
 	"github.com/woodchen-ink/czlterm/desktop/internal/paths"
 	"github.com/woodchen-ink/czlterm/desktop/internal/platform"
@@ -25,6 +26,10 @@ import (
 var assets embed.FS
 
 func main() {
+	// SSH 代理 helper 直接保留标准流, 不能初始化 GUI、日志或单实例锁。
+	if len(os.Args) > 1 && os.Args[1] == "ssh-proxy" {
+		os.Exit(launch.RunSSHProxy(os.Args[2:]))
+	}
 	// 被 git 当作 GIT_ASKPASS 调起, 回答同步仓库的用户名与令牌。见 internal/gitsync/auth.go。
 	if gitsync.AskpassActive() {
 		os.Exit(gitsync.RunAskpass(os.Args[1:]))

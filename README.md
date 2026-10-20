@@ -57,12 +57,14 @@ Introduction and discussion (Chinese): [SunAI forum thread](https://www.sunai.ne
 
 | Case | How |
 |---|---|
-| SSH private key | Decrypted into an in-process ssh-agent endpoint dedicated to this connection and handed to the system ssh through `SSH_AUTH_SOCK`. All keys of a jump chain share that endpoint; keys it doesn't hold are forwarded to your existing system agent |
-| SSH password | ssh calls back into czlterm through `SSH_ASKPASS` and fetches the password with a one-time token. Other prompts (host key confirmation, 2FA codes) stay in the terminal for you to answer |
+| SSH private key | Each hop's selected key is decrypted into its own in-process ssh-agent and selected via `IdentityAgent` in that hop's temporary SSH config. System agents are never forwarded |
+| SSH password | ssh calls back into czlterm through `SSH_ASKPASS` and fetches the password with a one-time token. Password-only connections do not attempt public-key authentication; other prompts such as host key confirmation remain interactive |
 | RDP (Windows) | Written temporarily to Credential Manager as `TERMSRV/<host>` and restored after 2 minutes: a credential you had saved for that host is put back, otherwise it is deleted |
 | RDP (macOS) | Windows App does not accept passwords from outside, so the password is copied to the clipboard and cleared after 45 seconds |
 | VNC (macOS) | Screen Sharing is opened with a `vnc://` link. The password is not put in the link (command-line arguments are visible to other local users); it goes to the clipboard and is cleared after 45 seconds |
 | VNC (Windows) | A `-passwd` file is generated for TigerVNC and deleted after 2 minutes; other viewers fall back to the clipboard |
+
+Vault authentication uses only the selected items, without reading the system agent, default private keys or `~/.ssh/config`. Missing credentials fail explicitly rather than falling back to system authentication. Each jump hop has its own authentication source; only "System default" reads system authentication settings. Temporary SSH configs contain no passwords or private keys and are removed after the terminal command exits.
 
 Locking the vault (manually or after the idle timeout) or quitting clears the agent endpoints, in-process SSH connections and the bw session.
 

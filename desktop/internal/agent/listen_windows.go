@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/Microsoft/go-winio"
 	"golang.org/x/sys/windows"
@@ -26,11 +25,3 @@ func listen(name string) (string, net.Listener, error) {
 }
 
 func cleanup(string) {}
-
-// defaultUpstream 是 Windows OpenSSH agent 服务的固定管道。
-const defaultUpstream = `\\.\pipe\openssh-ssh-agent`
-
-func dialUpstream(sock string) (net.Conn, error) {
-	timeout := 2 * time.Second
-	return winio.DialPipe(sock, &timeout)
-}

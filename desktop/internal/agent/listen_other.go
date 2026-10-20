@@ -27,8 +27,3 @@ func listen(name string) (string, net.Listener, error) {
 }
 
 func cleanup(path string) { _ = os.Remove(path) }
-
-// defaultUpstream 为空: macOS / Linux 的系统 agent 总是经 SSH_AUTH_SOCK 告知。
-const defaultUpstream = ""
-
-func dialUpstream(sock string) (net.Conn, error) { return net.Dial("unix", sock) }

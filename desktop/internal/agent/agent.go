@@ -1,7 +1,7 @@
 // Package agent 在进程内为每个连接开一个独立的 ssh-agent 端点, 供系统 ssh 通过 SSH_AUTH_SOCK 使用。
 //
 // 私钥从 Vaultwarden 解密后只放在这里的内存 keyring 中, 不写磁盘, 也不进系统 ssh-agent。
-// 一连接一端点: 每个端点只持有该连接 (含跳板链) 的私钥, ssh 不会逐个尝试一堆无关的密钥而撞上服务器的 MaxAuthTries。
+// 一跳一端点: 只持有该跳明确指定的私钥, 不透传系统 agent, 也不混入其他跳的密钥。
 // 端点在保险库锁定或程序退出时全部关闭。
 //
 // macOS / Linux 用 Unix socket, 放在系统临时目录下的私有子目录 (安装目录路径含空格且可能超过
@@ -47,9 +47,8 @@ type Key struct {
 	Comment    string
 }
 
-// Serve 确保 id 对应的端点在运行且恰好持有 keys, 返回给 SSH_AUTH_SOCK 用的路径。
-// id 取目标连接的 ID; 跳板链上各跳的私钥放在同一个端点里, 因为 ProxyJump 拉起的子 ssh
-// 只继承环境变量, 不继承命令行上的 -o IdentityAgent。
+// Serve 确保 id 对应的端点在运行且恰好持有 keys, 返回该跳 IdentityAgent 使用的路径。
+// id 取该跳连接的 ID; 不向系统 agent 透传列举或签名请求。
 func (s *Server) Serve(id string, keys []Key) (string, error) {
 	var added []sshagent.AddedKey
 	var fps []string
@@ -79,7 +78,7 @@ func (s *Server) Serve(id string, keys []Key) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("4102 start agent endpoint: %w", err)
 		}
-		ep = &endpoint{path: path, ln: ln, keyring: &chainAgent{local: sshagent.NewKeyring().(sshagent.ExtendedAgent)}}
+		ep = &endpoint{path: path, ln: ln, keyring: sshagent.NewKeyring()}
 		s.endpoints[id] = ep
 		go acceptLoop(ep)
 	}

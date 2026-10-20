@@ -37,7 +37,9 @@ type Hop struct {
 	Port     int
 	User     string
 	Password string
-	// Signers 来自 Vaultwarden 的私钥; 为空且 Password 为空时用系统 agent 与 ~/.ssh 默认私钥。
+	// Vault 为 true 时即使凭据为空也禁止回退系统认证。
+	Vault bool
+	// Signers 来自 Vaultwarden 的私钥。
 	Signers []ssh.Signer
 }
 
@@ -67,7 +69,7 @@ func NewPool() *Pool {
 func chainKey(chain []Hop) string {
 	var b strings.Builder
 	for _, h := range chain {
-		fmt.Fprintf(&b, "%s@%s|%d|", h.User, h.addr(), len(h.Password))
+		fmt.Fprintf(&b, "%s@%s|%d|%t|", h.User, h.addr(), len(h.Password), h.Vault)
 		for _, s := range h.Signers {
 			b.WriteString(ssh.FingerprintSHA256(s.PublicKey()))
 		}
@@ -249,6 +251,9 @@ func (p *Pool) config(h Hop) (*ssh.ClientConfig, error) {
 			}))
 	}
 	if len(methods) == 0 {
+		if h.Vault {
+			return nil, errors.New("4108 vault credentials are required")
+		}
 		methods = systemAuth()
 	}
 	return &ssh.ClientConfig{

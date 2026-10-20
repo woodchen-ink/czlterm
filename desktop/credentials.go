@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/user"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
 
 	"github.com/woodchen-ink/czlterm/desktop/internal/agent"
+	"github.com/woodchen-ink/czlterm/desktop/internal/askpass"
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
+	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/sshx"
 )
 
@@ -68,28 +71,27 @@ func (a *App) resolveChain(target conn.Connection) ([]hop, error) {
 					h.user = s.Username
 				}
 			}
+			if c.VaultItem != "" && h.password == "" {
+				return nil, fmt.Errorf("4107 vault item has no password")
+			}
+			if c.KeyItem != "" && h.privateKey == "" {
+				return nil, fmt.Errorf("4104 vault item has no private key")
+			}
+			if h.password == "" && h.privateKey == "" {
+				return nil, fmt.Errorf("4108 vault credentials are required")
+			}
 		}
 		hops = append(hops, h)
 	}
 	return hops, nil
 }
 
-// agentKeys 收集链上来自保险库的私钥。
-func agentKeys(hops []hop) []agent.Key {
-	var keys []agent.Key
-	for _, h := range hops {
-		if h.privateKey != "" {
-			keys = append(keys, agent.Key{PrivateKey: h.privateKey, Passphrase: h.passphrase, Comment: "czlterm:" + h.conn.Name})
-		}
-	}
-	return keys
-}
-
 // sshHops 把解析结果转成进程内 SSH 客户端用的链路。
 func sshHops(hops []hop) ([]sshx.Hop, error) {
 	out := make([]sshx.Hop, 0, len(hops))
 	for _, h := range hops {
-		sh := sshx.Hop{Host: h.conn.Host, Port: h.conn.Port, User: h.user, Password: h.password}
+		sh := sshx.Hop{Host: h.conn.Host, Port: h.conn.Port, User: h.user, Password: h.password,
+			Vault: h.conn.Auth == conn.AuthVault}
 		if h.privateKey != "" {
 			raw, err := agent.ParseKey(h.privateKey, h.passphrase)
 			if err != nil {
@@ -102,6 +104,37 @@ func sshHops(hops []hop) ([]sshx.Hop, error) {
 			sh.Signers = []ssh.Signer{signer}
 		}
 		out = append(out, sh)
+	}
+	return out, nil
+}
+
+// terminalHops 给每一跳独立的 agent 和密码令牌, 同主机同用户不同端口也不共享凭据。
+func (a *App) terminalHops(hops []hop, exe string) ([]launch.SSHHop, error) {
+	out := make([]launch.SSHHop, 0, len(hops))
+	for _, h := range hops {
+		lh := launch.SSHHop{Host: bracketless(h.conn.Host), Port: h.conn.Port, User: h.user,
+			Vault: h.conn.Auth == conn.AuthVault, Password: h.password != "", Env: launch.SSHPasswordEnv()}
+		if h.privateKey != "" {
+			sock, err := a.agents.Serve(h.conn.ID, []agent.Key{{PrivateKey: h.privateKey,
+				Passphrase: h.passphrase, Comment: "czlterm:" + h.conn.Name}})
+			if err != nil {
+				return nil, err
+			}
+			lh.Agent = sock
+		}
+		if h.password != "" {
+			u := h.user
+			if u == "" {
+				u = localUsername()
+			}
+			lh.Env = append(lh.Env, "SSH_ASKPASS="+exe, "SSH_ASKPASS_REQUIRE=force")
+			if os.Getenv("DISPLAY") == "" {
+				lh.Env = append(lh.Env, "DISPLAY=:0")
+			}
+			creds := []askpass.Credential{{Target: u + "@" + bracketless(h.conn.Host), Password: h.password}}
+			lh.Env = append(lh.Env, a.askpass.Grant(creds, 1)...)
+		}
+		out = append(out, lh)
 	}
 	return out, nil
 }

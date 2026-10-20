@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"net"
+	"path/filepath"
 	"testing"
 
 	"golang.org/x/crypto/ssh"
@@ -15,7 +16,30 @@ import (
 
 // 端点能列出并用 Vaultwarden 私钥签名; 锁定后端点关闭。
 func TestServeAndClose(t *testing.T) {
-	t.Setenv("SSH_AUTH_SOCK", "") // 不透传到开发机上的真实 agent
+	upstreamSock := filepath.Join(t.TempDir(), "upstream.sock")
+	t.Setenv("SSH_AUTH_SOCK", upstreamSock)
+	upstreamKeys := sshagent.NewKeyring()
+	_, unrelated, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := upstreamKeys.Add(sshagent.AddedKey{PrivateKey: unrelated}); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("unix", upstreamSock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() { defer conn.Close(); _ = sshagent.ServeAgent(upstreamKeys, conn) }()
+		}
+	}()
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	block, err := ssh.MarshalPrivateKey(priv, "")
 	if err != nil {

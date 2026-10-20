@@ -35,6 +35,8 @@ export const englishErrors: Record<string, string> = {
   "4104": "The selected item has no private key",
   "4105": "The private key is encrypted. Add a custom field named passphrase to the vault item",
   "4106": "The private key format is not recognized",
+  "4107": "The selected vault item has no password. Choose a login item with a password",
+  "4108": "Select a vault password or SSH key, or switch to system authentication",
   "5003": "Could not connect to the server",
   "5004": "SSH authentication or handshake failed",
   "5006": "The host key differs from known_hosts. Verify the host before connecting; this may indicate an interception",

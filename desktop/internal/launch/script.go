@@ -25,6 +25,8 @@ type Spec struct {
 	// Env 为额外环境变量 (K=V), 写进启动脚本而不是终端程序的环境:
 	// Windows Terminal 等单实例终端的新标签由已运行的进程创建, 不继承调用方的环境。
 	Env []string
+	// CleanupFiles 在子命令结束后删除, 不在其运行期间删除跳板配置。
+	CleanupFiles []string
 }
 
 // writeScript 写出自删除的启动脚本, 返回路径。脚本第一步就删除自身, 里面的一次性令牌不在磁盘上久留。
@@ -59,7 +61,11 @@ func shScript(s Spec) string {
 		b.WriteString(" " + shQuote(a))
 	}
 	// 连接失败时停住, 否则终端窗口一闪而过, 用户看不到报错。
-	b.WriteString("\ncode=$?\nif [ $code -ne 0 ]; then printf '\\n[czlterm] exited with code %s, press Enter to close.' \"$code\"; read _; fi\n")
+	b.WriteString("\ncode=$?\n")
+	for _, path := range s.CleanupFiles {
+		fmt.Fprintf(&b, "rm -f -- %s\n", shQuote(path))
+	}
+	b.WriteString("if [ $code -ne 0 ]; then printf '\\n[czlterm] exited with code %s, press Enter to close.' \"$code\"; read _; fi\n")
 	return b.String()
 }
 
@@ -75,7 +81,11 @@ func powershellScript(s Spec) string {
 	for _, a := range s.Args {
 		b.WriteString(" " + psQuote(a))
 	}
-	b.WriteString("\nif ($LASTEXITCODE -ne 0) { Write-Host ''; Read-Host \"[czlterm] exited with code $LASTEXITCODE, press Enter to close\" | Out-Null }\n")
+	b.WriteString("\n$code = $LASTEXITCODE\n")
+	for _, path := range s.CleanupFiles {
+		fmt.Fprintf(&b, "Remove-Item -LiteralPath %s -Force -ErrorAction SilentlyContinue\n", psQuote(path))
+	}
+	b.WriteString("if ($code -ne 0) { Write-Host ''; Read-Host \"[czlterm] exited with code $code, press Enter to close\" | Out-Null }\n")
 	return b.String()
 }
 
