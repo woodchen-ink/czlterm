@@ -86,6 +86,9 @@ Section "-un.main"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
+    # 开机自启登记项, 见 internal/autostart
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${INFO_PRODUCTNAME}"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "${INFO_PRODUCTNAME}"
 
     !insertmacro wails.deleteUninstaller
     # 只在已空时删除目录本身, 保留的用户数据不受影响。

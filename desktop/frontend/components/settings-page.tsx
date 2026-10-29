@@ -61,6 +61,8 @@ export function SettingsPage({
   const [clearGitSecret, setClearGitSecret] = useState(false);
   const [mcp, setMcp] = useState<MCPConfig | null>(null);
   const [busy, setBusy] = useState(false);
+  // 自启状态读自系统登记, 切换即生效, 不随底部保存提交。
+  const [autoStart, setAutoStart] = useState(false);
   const { status, refreshStatus } = useVault();
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export function SettingsPage({
       .then((v) => {
         setView(v);
         setForm({ ...v.settings });
+        setAutoStart(v.autoStart);
       })
       .catch((e) => toast.error(errorText(e)));
     api.GetMCPConfig().then(setMcp).catch(() => setMcp(null));
@@ -149,6 +152,19 @@ export function SettingsPage({
                   </SelectContent>
                 </Select>
               </Field>
+              {view?.autoStartSupported && (
+                <ToggleRow
+                  label={t("开机自启")}
+                  hint={t("登录系统后在后台启动, 窗口收在托盘; 立即生效")}
+                  checked={autoStart}
+                  onChange={(on) =>
+                    api
+                      .SetAutoStart(on)
+                      .then(setAutoStart)
+                      .catch((e) => toast.error(errorText(e)))
+                  }
+                />
+              )}
             </div>
           ) : !view || !form ? (
             <div className="text-muted-foreground flex h-full items-center justify-center">

@@ -13,6 +13,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"github.com/woodchen-ink/czlterm/desktop/internal/askpass"
+	"github.com/woodchen-ink/czlterm/desktop/internal/autostart"
 	"github.com/woodchen-ink/czlterm/desktop/internal/gitsync"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/mcpbridge"
@@ -63,15 +64,22 @@ func main() {
 		},
 		// 两个实例会各开一套 agent 与 MCP 端点并争写 mcp.json; 再次启动时唤出已有窗口。
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               paths.InstanceID(),
-			OnSecondInstanceLaunch: func(options.SecondInstanceData) { app.showWindow() },
+			UniqueId: paths.InstanceID(),
+			OnSecondInstanceLaunch: func(d options.SecondInstanceData) {
+				// 自启拉起时已有实例在运行, 保持原状不弹窗。
+				if !autostart.FromArgs(d.Args) {
+					app.showWindow()
+				}
+			},
 		},
 		Menu:       appMenu(app),
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
 		// 点 X 只隐藏到后台继续运行, 靠托盘图标 (macOS 为菜单栏图标) 或 Dock 唤回; 退出走托盘菜单 / ⌘Q。
 		HideWindowOnClose: runtime.GOOS == "windows" || runtime.GOOS == "darwin",
-		Bind:              []any{app},
+		// 登录自启时只留托盘 / 菜单栏图标; 仅在有托盘的平台登记自启, 见 internal/autostart。
+		StartHidden: autostart.Launched(),
+		Bind:        []any{app},
 		Windows: &windows.Options{
 			WebviewUserDataPath: webviewDir,
 		},

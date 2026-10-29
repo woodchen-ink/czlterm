@@ -50,6 +50,8 @@ export const englishErrors: Record<string, string> = {
   "6004": "Sync conflict: the same connection was changed on two devices. Resolve it in the data directory",
   "6005": "Could not push changes. Check repository permissions",
   "7001": "Could not listen on the MCP port",
+  "8202": "Launch at login is unavailable for dev instances",
+  "8206": "Move czlterm to the Applications folder before enabling launch at login",
   "9001": "Could not check for updates. Check your network connection",
   "9002": "An update is already in progress",
   "9004": "Could not download the update. Try again later",

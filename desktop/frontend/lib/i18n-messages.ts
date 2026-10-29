@@ -12,6 +12,8 @@ export const english: Record<string, string> = {
   "语言 / Language": "Language / 语言",
   "跟随系统": "Follow system",
   "立即生效，仅保存在本机": "Applies immediately. Saved only on this device.",
+  "开机自启": "Launch at login",
+  "登录系统后在后台启动, 窗口收在托盘; 立即生效": "Starts in the background after you sign in, with the window kept in the tray. Applies immediately.",
   "外部程序": "External apps",
   "保险库": "Vault",
   "同步": "Sync",

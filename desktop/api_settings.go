@@ -11,6 +11,7 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/woodchen-ink/czlterm/desktop/internal/autostart"
 	"github.com/woodchen-ink/czlterm/desktop/internal/gitsync"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/secret"
@@ -26,6 +27,9 @@ type SettingsView struct {
 	// HasGitSecret 表示系统密钥库里存有同步密钥。密钥本身不下发。
 	HasGitSecret bool   `json:"hasGitSecret"`
 	OS           string `json:"os"`
+	// AutoStartSupported 为 false 时界面不显示开机自启; AutoStart 读自系统登记, 不在 settings 里。
+	AutoStartSupported bool `json:"autoStartSupported"`
+	AutoStart          bool `json:"autoStart"`
 }
 
 // GetSettings 返回设置与可选的终端、编辑器。MCP 令牌不下发, 界面只显示配置片段。
@@ -36,8 +40,21 @@ func (a *App) GetSettings() (SettingsView, error) {
 	s := a.settings.Get()
 	s.MCPToken = ""
 	gs, _ := secret.Get(secret.GitKey)
+	auto, err := autostart.Enabled()
+	if err != nil {
+		a.log.Warn("read autostart", "err", err)
+	}
 	return SettingsView{Settings: s, Terminals: launch.Terminals(), Editors: launch.Editors(), DataDir: a.dataDir, OS: runtime.GOOS,
-		HasGitSecret: gs != ""}, nil
+		HasGitSecret: gs != "", AutoStartSupported: autostart.Supported(), AutoStart: auto}, nil
+}
+
+// SetAutoStart 立即登记或取消登录自启, 自启后窗口隐藏在托盘。返回系统里的实际状态。
+func (a *App) SetAutoStart(on bool) (bool, error) {
+	if err := autostart.Set(on); err != nil {
+		a.log.Warn("set autostart", "on", on, "err", err)
+		return false, err
+	}
+	return autostart.Enabled()
 }
 
 // SetGitSecret 保存同步密钥 (HTTPS 访问令牌或 SSH 私钥) 到系统密钥库; 传空串则删除, 恢复使用 git 默认认证。
