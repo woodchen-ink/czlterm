@@ -25,6 +25,7 @@ type Entry struct {
 	IsLink  bool   `json:"isLink"`
 	Size    int64  `json:"size"`
 	Mode    string `json:"mode"`
+	Perm    uint32 `json:"perm"` // POSIX 权限位, 含 setuid/setgid/sticky
 	ModTime string `json:"modTime"`
 }
 
@@ -59,6 +60,7 @@ func List(c *sftp.Client, dir string) (Listing, error) {
 			IsLink:  fi.Mode()&fs.ModeSymlink != 0,
 			Size:    fi.Size(),
 			Mode:    fi.Mode().String(),
+			Perm:    permBits(fi.Mode()),
 			ModTime: fi.ModTime().UTC().Format(time.RFC3339),
 		}
 		if e.IsLink {
@@ -220,9 +222,16 @@ func Mkdir(c *sftp.Client, p string) error {
 	return wrap("5114 create directory", c.Mkdir(clean(p)))
 }
 
-// Rename 改名或移动。
+// Rename 改名或移动。目标已存在时报错: 部分服务器的 rename 会直接覆盖。
 func Rename(c *sftp.Client, from, to string) error {
-	return wrap("5115 rename", c.Rename(clean(from), clean(to)))
+	from, to = clean(from), clean(to)
+	if from == to {
+		return nil
+	}
+	if _, err := c.Lstat(to); err == nil {
+		return fmt.Errorf("5122 target already exists: %s", to)
+	}
+	return wrap("5115 rename", c.Rename(from, to))
 }
 
 // Remove 删除文件或空目录。不做递归删除: 误点一次就清空整个目录的代价太大。
@@ -248,8 +257,15 @@ func Stat(c *sftp.Client, p string) (Entry, error) {
 	if err != nil {
 		return Entry{}, wrap("5102 stat file", err)
 	}
-	return Entry{Name: fi.Name(), Path: p, IsDir: fi.IsDir(), Size: fi.Size(), Mode: fi.Mode().String(),
-		ModTime: fi.ModTime().UTC().Format(time.RFC3339)}, nil
+	return Entry{
+		Name:    fi.Name(),
+		Path:    p,
+		IsDir:   fi.IsDir(),
+		Size:    fi.Size(),
+		Mode:    fi.Mode().String(),
+		Perm:    permBits(fi.Mode()),
+		ModTime: fi.ModTime().UTC().Format(time.RFC3339),
+	}, nil
 }
 
 // clean 规范化远程路径。远程总是 POSIX 风格, 不能用 filepath。

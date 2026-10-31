@@ -80,6 +80,44 @@ func (a *App) FilesRename(id, from, to string) error {
 	return a.withSFTP(id, func(c *sftp.Client) error { return remotefs.Rename(c, from, to) })
 }
 
+// FilesMove 把多个文件或目录移到 dir 下, 返回成功移动的数量; 遇到第一个失败即停止。
+func (a *App) FilesMove(id string, srcs []string, dir string) (int, error) {
+	return a.eachSFTP(id, srcs, func(c *sftp.Client, src string) error {
+		_, err := remotefs.Move(c, src, dir)
+		return err
+	})
+}
+
+// FilesCopy 把多个文件或目录复制到 dir 下, 重名时自动编号。返回成功复制的数量。
+func (a *App) FilesCopy(id string, srcs []string, dir string) (int, error) {
+	return a.eachSFTP(id, srcs, func(c *sftp.Client, src string) error {
+		_, err := remotefs.Copy(c, src, dir)
+		return err
+	})
+}
+
+// FilesChmod 修改权限。scope 见 remotefs.ChmodScope。
+func (a *App) FilesChmod(id string, paths []string, mode uint32, scope string) (int, error) {
+	return a.eachSFTP(id, paths, func(c *sftp.Client, p string) error {
+		return remotefs.Chmod(c, p, mode, remotefs.ChmodScope(scope))
+	})
+}
+
+// eachSFTP 对每个路径依次执行操作, 返回成功的数量。
+func (a *App) eachSFTP(id string, paths []string, fn func(*sftp.Client, string) error) (int, error) {
+	n := 0
+	err := a.withSFTP(id, func(c *sftp.Client) error {
+		for _, p := range paths {
+			if err := fn(c, p); err != nil {
+				return err
+			}
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
 // FilesRemove 删除文件或空目录。
 func (a *App) FilesRemove(id, p string) error {
 	return a.withSFTP(id, func(c *sftp.Client) error { return remotefs.Remove(c, p) })
