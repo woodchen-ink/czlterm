@@ -32,6 +32,7 @@ const (
 	eventEditStatus    = "edit:status"
 	eventFacts         = "facts:updated"
 	eventGeo           = "geo:updated"
+	eventHostKey       = "hostkey:changed"
 )
 
 // App 承载应用生命周期, 方法绑定给前端调用。
@@ -77,6 +78,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.agents = agent.New()
 	a.pool = sshx.NewPool()
+	a.pool.SetHostKeyHandler(a.onHostKeyChanged)
 	a.vault = vault.New(a.onVaultLocked)
 
 	if err := a.init(); err != nil {

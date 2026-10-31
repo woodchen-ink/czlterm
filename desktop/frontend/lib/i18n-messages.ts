@@ -273,4 +273,10 @@ export const english: Record<string, string> = {
   "递归应用到子目录 (含自身)": "Recursively to folders (including itself)",
   "递归应用到子文件 (不含目录)": "Recursively to files only (not folders)",
   "应用": "Apply",
+  "{0} 的主机密钥变了": "Host key for {0} has changed",
+  "服务器出示的主机密钥与 known_hosts 里的记录不同。重装系统或重新生成主机密钥后会这样; 如果服务器没有做过这些操作, 可能有人在中间拦截连接, 请先通过其他途径核实指纹。": "The server presented a host key that differs from known_hosts. This happens after reinstalling the system or regenerating host keys. If neither happened, someone may be intercepting the connection; verify the fingerprint another way first.",
+  "新指纹 ({0})": "New fingerprint ({0})",
+  "原记录": "Previously recorded",
+  "信任新密钥": "Trust new key",
+  "已更新 {0} 的主机密钥, 请重新连接": "Updated host key for {0}. Connect again",
 };

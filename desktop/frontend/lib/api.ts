@@ -25,6 +25,14 @@ export type Facts = facts.Facts;
 export type Script = script.Script;
 export type ScriptList = main.ScriptList;
 
+/** 主机密钥与 known_hosts 不符的提示, 对应 sshx.HostKeyChange (只经事件推送, 绑定里没有生成)。 */
+export interface HostKeyChange {
+  host: string;
+  keyType: string;
+  fingerprint: string;
+  known: string[] | null;
+}
+
 export type Protocol = "ssh" | "rdp" | "vnc";
 
 export const api = App;
@@ -39,6 +47,7 @@ export const Events = {
   updateProgress: "update:progress",
   factsUpdated: "facts:updated",
   geoUpdated: "geo:updated",
+  hostKeyChanged: "hostkey:changed",
 } as const;
 
 /** 用系统浏览器打开外部链接。 */

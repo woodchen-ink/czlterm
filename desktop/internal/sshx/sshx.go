@@ -2,7 +2,7 @@
 //
 // 交互式终端仍交给系统 ssh; 这里的连接按目标连接 ID 复用, 空闲 10 分钟后关闭。
 //
-// 主机密钥按 ~/.ssh/known_hosts 校验, 与系统 ssh 共用一份: 已知且不符时拒绝连接;
+// 主机密钥按 ~/.ssh/known_hosts 校验, 与系统 ssh 共用一份: 已知且不符时拒绝连接, 并把新密钥交给界面确认替换;
 // 未知主机按 accept-new 语义记录后继续 (等同 StrictHostKeyChecking=accept-new),
 // 文件管理与 MCP 没有终端可以弹出指纹确认。
 package sshx
@@ -23,7 +23,6 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	sshagent "golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 const (
@@ -49,7 +48,11 @@ func (h Hop) addr() string { return net.JoinHostPort(h.Host, strconv.Itoa(h.Port
 type Pool struct {
 	mu      sync.Mutex
 	entries map[string]*entry
-	hostsMu sync.Mutex
+
+	// hostsMu 串行化 known_hosts 的读写, 也保护 changes 与 onHostKey。
+	hostsMu   sync.Mutex
+	changes   map[string]ssh.PublicKey // 主机名 -> 握手时见到的、与记录不符的新密钥
+	onHostKey func(HostKeyChange)
 }
 
 type entry struct {
@@ -62,7 +65,7 @@ type entry struct {
 
 // NewPool 创建连接池。
 func NewPool() *Pool {
-	return &Pool{entries: map[string]*entry{}}
+	return &Pool{entries: map[string]*entry{}, changes: map[string]ssh.PublicKey{}}
 }
 
 // chainKey 标识一条链路的配置; 配置变了 (改了主机、换了密码) 就不复用旧连接。
@@ -294,49 +297,6 @@ func systemAuth() []ssh.AuthMethod {
 		return nil
 	}
 	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}
-}
-
-// hostKeyCallback 按 known_hosts 校验, 未知主机记录后放行。
-func (p *Pool) hostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
-	path, err := knownHostsPath()
-	if err != nil {
-		return err
-	}
-	p.hostsMu.Lock()
-	defer p.hostsMu.Unlock()
-
-	if _, err := os.Stat(path); err == nil {
-		cb, err := knownhosts.New(path)
-		if err != nil {
-			return fmt.Errorf("5005 read known_hosts: %w", err)
-		}
-		err = cb(hostname, remote, key)
-		if err == nil {
-			return nil
-		}
-		var ke *knownhosts.KeyError
-		if !errors.As(err, &ke) || len(ke.Want) > 0 {
-			return fmt.Errorf("5006 host key mismatch for %s, check ~/.ssh/known_hosts: %w", hostname, err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return fmt.Errorf("5007 write known_hosts: %w", err)
-	}
-	defer f.Close()
-	_, err = f.WriteString(knownhosts.Line([]string{knownhosts.Normalize(hostname)}, key) + "\n")
-	return err
-}
-
-func knownHostsPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("5008 locate home dir: %w", err)
-	}
-	return filepath.Join(home, ".ssh", "known_hosts"), nil
 }
 
 // alive 发一次 keepalive, 2 秒内没有回应视为已断 (休眠唤醒、换网络后 TCP 常常半开)。

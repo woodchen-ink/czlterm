@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { ConnectionDetail, type DetailTab } from "@/components/connection-detail";
 import { ConnectionForm } from "@/components/connection-form";
 import { ConnectionList, type ConnectionActions } from "@/components/connection-list";
+import { HostKeyDialog } from "@/components/host-key-dialog";
 import { ScriptsPage } from "@/components/scripts-page";
 import { SettingsPage, type SettingsTab } from "@/components/settings-page";
 import { StatusBar } from "@/components/status-bar";
@@ -343,6 +344,8 @@ function Shell() {
           setSelectedId(c.id);
         }}
       />
+      <HostKeyDialog />
+
       <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
