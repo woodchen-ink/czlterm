@@ -152,6 +152,8 @@ export const english: Record<string, string> = {
   "设置已保存": "Settings saved",
   "已复制": "Copied",
   "复制失败": "Copy failed",
+  "已复制 {0}": "Copied {0}",
+  "复制 {0}": "Copy {0}",
   "终端": "Terminal",
   "SSH 连接在这里打开": "SSH connections open in this app",
   " (未安装)": " (not installed)",

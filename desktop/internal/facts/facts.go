@@ -1,8 +1,8 @@
-// Package facts 采集并保存服务器的机器配置与系统信息 (系统、内核、CPU、内存、磁盘、运行时长)。
+// Package facts 采集并保存服务器的机器配置与系统信息 (系统、内核、CPU、内存、磁盘、运行时长、IP 地址)。
 //
 // 每次 SSH 连接后在后台经进程内 SSH 采集一次。稳定信息 (系统、硬件) 写进 `data/facts/<id>.json`
 // 随连接一起同步, 只在内容变化时重写, 不让每次连接都产生一个 git 提交; 易变信息 (已用磁盘、
-// 可用内存、运行时长、负载) 只写本机 `cache/facts/<id>.json`。
+// 可用内存、运行时长、负载、IP 地址) 只写本机 `cache/facts/<id>.json`。
 package facts
 
 import (
@@ -47,6 +47,9 @@ type Volatile struct {
 	DiskUsedBytes        int64  `json:"diskUsedBytes"`
 	UptimeSeconds        int64  `json:"uptimeSeconds"`
 	Load                 string `json:"load"`
+	// IPv4 / IPv6 是网卡上的可用地址 (公网在前)。DHCP 与 SLAAC 下会变, 所以不参与同步。
+	IPv4 []string `json:"ipv4"`
+	IPv6 []string `json:"ipv6"`
 }
 
 // Facts 是一台机器的完整信息。
@@ -91,6 +94,12 @@ if [ -z "$up" ]; then
 fi
 echo "uptime=$up"
 echo "load=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || sysctl -n vm.loadavg 2>/dev/null | tr -d '{}')"
+# 网卡地址: addr=<网卡> <地址>, 过滤在 Go 侧; IPv6 临时 (隐私) 与弃用地址会频繁变化, 不列出。
+if command -v ip >/dev/null 2>&1; then
+  ip -o addr show 2>/dev/null | awk '!/ temporary| deprecated| tentative/ {print "addr="$2" "$4}'
+else
+  ifconfig 2>/dev/null | awk '/^[^ \t]/{i=$1; sub(":$","",i)} ($1=="inet"||$1=="inet6") && !/ temporary| deprecated| tentative/ {print "addr="i" "$2}'
+fi
 exit 0
 `
 
@@ -113,6 +122,7 @@ $dFree = ($d | Where-Object Property -eq FreeSpace).Sum
 "disk_total_kb=$([int64]($dSize / 1024))"
 "disk_used_kb=$([int64](($dSize - $dFree) / 1024))"
 "uptime=$([int64]((Get-Date) - $o.LastBootUpTime).TotalSeconds)"
+Get-NetIPAddress -AddressState Preferred | Where-Object SuffixOrigin -ne 'Random' | ForEach-Object { "addr=$($_.InterfaceAlias) $($_.IPAddress)" }
 `
 
 // Collect 在远程执行采集脚本。先按 POSIX shell 跑; 没有 sh 的 Windows 服务器退回 PowerShell。
@@ -134,16 +144,23 @@ func Collect(ctx context.Context, client *ssh.Client) (Facts, error) {
 	return Facts{}, fmt.Errorf("5201 collect system info: %w", err)
 }
 
-// parse 解析 key=value 行。同一个键出现多次时后者覆盖前者 (macOS 段覆盖 os-release 段)。
+// parse 解析 key=value 行。同一个键出现多次时后者覆盖前者 (macOS 段覆盖 os-release 段); addr 是多值键, 逐行收集。
 func parse(out string) Facts {
 	kv := map[string]string{}
+	var addrs []string
 	sc := bufio.NewScanner(strings.NewReader(out))
 	for sc.Scan() {
 		k, v, ok := strings.Cut(strings.TrimRight(sc.Text(), "\r"), "=")
-		if ok {
-			if v = strings.TrimSpace(v); v != "" {
-				kv[k] = v
-			}
+		if !ok {
+			continue
+		}
+		if v = strings.TrimSpace(v); v == "" {
+			continue
+		}
+		if k == "addr" {
+			addrs = append(addrs, v)
+		} else {
+			kv[k] = v
 		}
 	}
 	num := func(k string) int64 {
@@ -169,6 +186,7 @@ func parse(out string) Facts {
 	f.DiskUsedBytes = num("disk_used_kb") * 1024
 	f.UptimeSeconds = num("uptime")
 	f.Load = kv["load"]
+	f.IPv4, f.IPv6 = parseAddrs(addrs)
 	if f.OSName == "" && f.Kernel != "" {
 		f.OSName = f.Kernel
 	}

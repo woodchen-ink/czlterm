@@ -4,7 +4,7 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/components/language-provider";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2Icon, RefreshCwIcon } from "lucide-react";
+import { CopyIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { OSIcon } from "@/components/os-icon";
@@ -74,6 +74,8 @@ export function SystemInfo({ connId }: { connId: string }) {
           <p className="text-muted-foreground truncate text-xs">
             {[facts.hostname, facts.kernel, facts.arch].filter(Boolean).join(" · ")}
           </p>
+          <AddressList label="IPv4" addrs={facts.ipv4} />
+          <AddressList label="IPv6" addrs={facts.ipv6} />
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -86,6 +88,35 @@ export function SystemInfo({ connId }: { connId: string }) {
         {facts.load ? t("负载 {0} · ", facts.load) : ""}{t("采集于 {0}", formatTime(facts.collectedAt))}
       </p>
     </section>
+  );
+}
+
+/** 一组网卡地址, 点击单个地址复制。旧缓存里没有这个字段, 为空时不渲染。 */
+function AddressList({ label, addrs }: { label: string; addrs?: string[] | null }) {
+  useLanguage();
+  if (!addrs?.length) return null;
+  function copy(addr: string) {
+    navigator.clipboard.writeText(addr).then(
+      () => toast.success(t("已复制 {0}", addr)),
+      () => toast.error(t("复制失败")),
+    );
+  }
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      <span className="text-muted-foreground w-8 shrink-0 text-xs">{label}</span>
+      {addrs.map((addr) => (
+        <button
+          key={addr}
+          type="button"
+          onClick={() => copy(addr)}
+          title={t("复制 {0}", addr)}
+          className="hover:bg-muted group inline-flex max-w-full items-center gap-1 rounded px-1 font-mono text-xs"
+        >
+          <span className="truncate">{addr}</span>
+          <CopyIcon className="text-muted-foreground size-3 shrink-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
+        </button>
+      ))}
+    </div>
   );
 }
 

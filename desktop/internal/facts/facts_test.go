@@ -17,6 +17,20 @@ func TestParseLinux(t *testing.T) {
 	}
 }
 
+func TestParseAddrs(t *testing.T) {
+	out := "kernel=Linux 6.8.0\n" +
+		"addr=lo 127.0.0.1/8\naddr=eth0 10.0.0.5/24\naddr=eth0 203.0.113.7/24\naddr=docker0 172.17.0.1/16\n" +
+		"addr=lo ::1/128\naddr=eth0 fe80::1/64\naddr=eth0 2001:db8::5/64\naddr=en0 fd00::9%en0\naddr=eth0 2001:db8::5/64\n" +
+		"addr=Ethernet 2 192.168.1.20\naddr=vEthernet (WSL (Hyper-V firewall)) 172.20.0.1\naddr=eth1 addr:198.51.100.2\n"
+	f := parse(out)
+	if got := strings.Join(f.IPv4, ","); got != "203.0.113.7,198.51.100.2,10.0.0.5,192.168.1.20" {
+		t.Fatalf("ipv4 = %s", got)
+	}
+	if got := strings.Join(f.IPv6, ","); got != "2001:db8::5,fd00::9" {
+		t.Fatalf("ipv6 = %s", got)
+	}
+}
+
 // 本机 shell 跑一遍采集脚本, 确认脚本本身在 macOS / Linux 上不报错且能解析出关键字段。
 func TestUnixScriptLocally(t *testing.T) {
 	if runtime.GOOS == "windows" {
