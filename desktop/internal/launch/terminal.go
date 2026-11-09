@@ -25,24 +25,16 @@ type terminalDef struct {
 	open func(probe, script, title string) *exec.Cmd
 }
 
-// Terminals 列出当前系统支持的终端及是否已安装。
+// BuiltinTerminal 是内置终端的 ID: ssh 在应用自己的伪终端里运行 (internal/term), 不调起外部程序。
+const BuiltinTerminal = "builtin"
+
+// Terminals 列出内置终端与当前系统支持的外部终端及是否已安装。
 func Terminals() []Terminal {
-	var out []Terminal
+	out := []Terminal{{ID: BuiltinTerminal, Name: "CZLTerm", Installed: true}}
 	for _, d := range terminalDefs() {
 		out = append(out, Terminal{ID: d.id, Name: d.name, Installed: d.probe() != ""})
 	}
 	return out
-}
-
-// DefaultTerminal 返回当前系统的默认终端 ID。
-func DefaultTerminal() string {
-	if runtime.GOOS == "windows" {
-		if findWT() != "" {
-			return "wt"
-		}
-		return "powershell"
-	}
-	return "terminal"
 }
 
 // OpenTerminal 在指定终端中运行 spec。

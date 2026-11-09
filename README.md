@@ -2,9 +2,9 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A lightweight connection manager. SSH, RDP and VNC open in the clients you already have; czlterm manages the connections, pulls credentials from Vaultwarden, browses remote files, and exposes your servers to AI clients over MCP.
+A lightweight connection manager. SSH runs your system OpenSSH in a built-in tabbed terminal, RDP and VNC open in the clients you already have; czlterm manages the connections, pulls credentials from Vaultwarden, browses remote files, and exposes your servers to AI clients over MCP.
 
-- **No built-in terminal or remote desktop**: SSH opens in your system terminal (Terminal, iTerm2, Ghostty, WezTerm, kitty, Windows Terminal, PowerShell); RDP uses Windows App on macOS and mstsc on Windows; VNC uses the built-in Screen Sharing on macOS and TigerVNC on Windows
+- **Built-in terminal, no built-in remote desktop**: SSH opens in terminal tabs inside the app, several at once; you can switch to your system terminal in settings (Terminal, iTerm2, Ghostty, WezTerm, kitty, Windows Terminal, PowerShell). RDP uses Windows App on macOS and mstsc on Windows; VNC uses the built-in Screen Sharing on macOS and TigerVNC on Windows
 - **Credentials from Vaultwarden**: passwords and SSH private keys are read through the official `bw` CLI and never written to disk
 - **File manager**: browse, upload, download, rename and delete over SFTP; double-click a file to open it in VS Code (or your editor of choice), and it is uploaded back when you save
 - **MCP**: AI clients can list your connections and, on servers you allow, read and write files and run commands
@@ -20,7 +20,7 @@ A lightweight connection manager. SSH, RDP and VNC open in the clients you alrea
 | | |
 |---|---|
 | ![SFTP file manager](docs/screenshots/files.webp) | ![SSH opens in your system terminal](docs/screenshots/ssh-terminal.webp) |
-| SFTP file manager; double-click to edit, saved back automatically | Connect opens your system terminal; czlterm supplies the key or password |
+| SFTP file manager; double-click to edit, saved back automatically | Connect opens a terminal tab (or your system terminal); czlterm supplies the key or password |
 | ![Edit connection: credentials reference Vaultwarden items](docs/screenshots/edit-connection.webp) | ![MCP settings](docs/screenshots/settings-mcp.webp) |
 | Credentials only reference Vaultwarden items; no plaintext in the config | Tiered MCP permissions, multi-line scripts supported |
 | ![Sync settings](docs/screenshots/settings-sync.webp) | ![About and updates](docs/screenshots/settings-about.webp) |

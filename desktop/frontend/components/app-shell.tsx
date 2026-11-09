@@ -14,6 +14,7 @@ import { HostKeyDialog } from "@/components/host-key-dialog";
 import { ScriptsPage } from "@/components/scripts-page";
 import { SettingsPage, type SettingsTab } from "@/components/settings-page";
 import { StatusBar } from "@/components/status-bar";
+import { DETAIL_VIEW, TerminalPanes, TerminalTabBar, useTerminalTabs, type TerminalTab } from "@/components/terminal-workspace";
 import { UnlockCancelled, useVault, VaultProvider } from "@/components/vault-provider";
 import {
   AlertDialog,
@@ -41,9 +42,11 @@ import {
   type Script,
   type ScriptList,
   type SyncStatus,
+  type TerminalInfo,
   type UpdateInfo,
 } from "@/lib/api";
 import { errorText } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 
 export function AppShell() {
   return (
@@ -157,25 +160,52 @@ function Shell() {
 
   const scriptItems = useMemo(() => scripts?.items ?? [], [scripts]);
 
-  // 运行脚本与连接一样可能要先解锁保险库。
-  const runScript = useCallback(
-    async (c: ConnectionView, s: Script) => {
+  // 内置终端: 打开连接 / 运行脚本返回会话 ID 时在主区域新开标签; 走外部终端时返回空串。
+  const relaunch = useCallback(
+    async (tab: TerminalTab): Promise<TerminalInfo | null> => {
       try {
-        await withVault(() => api.RunScript(c.id, s.id));
-        toast.success(t("正在 {0} 上运行 {1}", c.name, s.name));
+        const id = tab.scriptId
+          ? await withVault(() => api.RunScript(tab.connId, tab.scriptId))
+          : (await withVault(() => api.Connect(tab.connId))).terminalId;
+        return id ? await terminalInfo(id) : null;
       } catch (e) {
         if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
+        return null;
       }
     },
     [withVault],
   );
+  const terms = useTerminalTabs(relaunch);
+  const openTerminal = terms.open;
 
+  // 运行脚本与连接一样可能要先解锁保险库。
+  const runScript = useCallback(
+    async (c: ConnectionView, s: Script) => {
+      try {
+        const id = await withVault(() => api.RunScript(c.id, s.id));
+        const info = id ? await terminalInfo(id) : null;
+        if (info) {
+          openTerminal(info);
+          setScriptsOpen(false);
+        } else if (!id) toast.success(t("正在 {0} 上运行 {1}", c.name, s.name));
+      } catch (e) {
+        if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
+      }
+    },
+    [withVault, openTerminal],
+  );
+
+  const showDetail = terms.setView;
   const actions: ConnectionActions = useMemo(
     () => ({
       connect: async (c) => {
         try {
           const r = await withVault(() => api.Connect(c.id));
-          if (r.passwordCopied) toast.success(t("正在打开 {0}, 密码已复制到剪贴板, {1} 秒后清除", c.name, r.clipboardSeconds));
+          const info = r.terminalId ? await terminalInfo(r.terminalId) : null;
+          // 走内置终端但会话已经结束 (秒退) 时不再提示「正在打开」。
+          if (info) openTerminal(info);
+          else if (r.terminalId) return;
+          else if (r.passwordCopied) toast.success(t("正在打开 {0}, 密码已复制到剪贴板, {1} 秒后清除", c.name, r.clipboardSeconds));
           else toast.success(t("正在打开 {0}", c.name));
         } catch (e) {
           if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
@@ -184,6 +214,7 @@ function Shell() {
       openFiles: (c) => {
         setSelectedId(c.id);
         setTab("files");
+        showDetail(DETAIL_VIEW);
       },
       edit: (c) => {
         setFormInitial(c);
@@ -203,7 +234,7 @@ function Shell() {
       runScript,
       manageScripts: () => setScriptsOpen(true),
     }),
-    [withVault, reload, runScript],
+    [withVault, reload, runScript, openTerminal, showDetail],
   );
 
   function create(protocol: Protocol) {
@@ -219,33 +250,28 @@ function Shell() {
     setSettingsOpen(true);
   }
 
-  // 设置与脚本库是整页视图, 覆盖侧栏与主区域; 返回后回到原来的连接。
-  if (scriptsOpen) {
-    return (
-      <ScriptsPage
-        scripts={scriptItems}
-        groups={scripts?.groups ?? []}
-        connections={items}
-        initialConnId={selectedId}
-        onClose={() => setScriptsOpen(false)}
-        onChanged={reloadScripts}
-        onRun={runScript}
-      />
-    );
-  }
-  if (settingsOpen) {
-    return (
-      <SettingsPage
-        initialTab={settingsTab}
-        onClose={() => setSettingsOpen(false)}
-        onSaved={(syncing) => {
-          announceSync.current = syncing;
-          loadSettings();
-          void reload();
-        }}
-      />
-    );
-  }
+  // 设置与脚本库是整页视图, 盖住侧栏与主区域; 主界面只隐藏不卸载, 内置终端的内容都还在。
+  const page = scriptsOpen ? (
+    <ScriptsPage
+      scripts={scriptItems}
+      groups={scripts?.groups ?? []}
+      connections={items}
+      initialConnId={selectedId}
+      onClose={() => setScriptsOpen(false)}
+      onChanged={reloadScripts}
+      onRun={runScript}
+    />
+) : settingsOpen ? (
+    <SettingsPage
+      initialTab={settingsTab}
+      onClose={() => setSettingsOpen(false)}
+      onSaved={(syncing) => {
+        announceSync.current = syncing;
+        loadSettings();
+        void reload();
+      }}
+    />
+  ) : null;
 
   /** 侧栏同步按钮: 连接配置走 git, 保险库已解锁时顺带从服务器同步条目 (bw sync)。 */
   async function syncNow() {
@@ -264,115 +290,130 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full">
-      <aside className="bg-sidebar text-sidebar-foreground flex w-72 shrink-0 flex-col border-r">
-        <div className="flex shrink-0 items-center gap-1 p-2">
-          <div className="relative min-w-0 flex-1">
-            <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-            <Input className="h-7 pl-7 text-sm" placeholder={t("搜索")} value={query} onChange={(e) => setQuery(e.target.value)} />
+    <>
+      {page}
+      <div className={cn("flex h-full", page && "hidden")}>
+        <aside className="bg-sidebar text-sidebar-foreground flex w-72 shrink-0 flex-col border-r">
+          <div className="flex shrink-0 items-center gap-1 p-2">
+            <div className="relative min-w-0 flex-1">
+              <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
+              <Input className="h-7 pl-7 text-sm" placeholder={t("搜索")} value={query} onChange={(e) => setQuery(e.target.value)} />
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={t("新建连接")}>
+                  <PlusIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => create("ssh")}>{t("新建 SSH")}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => create("rdp")}>{t("新建 RDP")}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => create("vnc")}>{t("新建 VNC")}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={t("新建连接")}>
-                <PlusIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => create("ssh")}>{t("新建 SSH")}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => create("rdp")}>{t("新建 RDP")}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => create("vnc")}>{t("新建 VNC")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div className="czl-scroll min-h-0 flex-1 overflow-y-auto">
-          {loadError ? (
-            <p className="text-destructive px-4 py-6 text-sm">{errorText(loadError)}</p>
-          ) : (
-            <ConnectionList
-              items={items}
-              query={query}
-              scripts={scriptItems}
-              selectedId={selectedId}
-              onSelect={(id) => {
-                if (id !== selectedId) setTab("overview");
-                setSelectedId(id);
-              }}
-              actions={actions}
-            />
-          )}
-        </div>
-        {update?.release && (
-          <button
-            type="button"
-            className="bg-accent text-accent-foreground mx-2 mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
-            onClick={() => openSettings("about")}
-          >
-            <ArrowUpCircleIcon className="size-4 shrink-0" />
-            <span className="truncate">{t("新版本 {0} 可用, 点击更新", update.release.version)}</span>
-          </button>
-        )}
-        <StatusBar
-          sync={sync}
-          syncEnabled={syncEnabled}
-          onSync={syncNow}
-          onScripts={() => setScriptsOpen(true)}
-          onSettings={() => openSettings("general")}
-        />
-      </aside>
-
-      <main className="bg-background min-w-0 flex-1">
-        {selected ? (
-          <ConnectionDetail key={selected.id} c={selected} scripts={scriptItems} tab={tab} onTabChange={setTab} actions={actions} />
-        ) : (
-          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
-            <p>{t("选择左侧的连接, 双击直接连接")}
-            </p>
+          <div className="czl-scroll min-h-0 flex-1 overflow-y-auto">
+            {loadError ? (
+              <p className="text-destructive px-4 py-6 text-sm">{errorText(loadError)}</p>
+            ) : (
+              <ConnectionList
+                items={items}
+                query={query}
+                scripts={scriptItems}
+                selectedId={selectedId}
+                onSelect={(id) => {
+                  if (id !== selectedId) setTab("overview");
+                  setSelectedId(id);
+                  terms.setView(DETAIL_VIEW);
+                }}
+                actions={actions}
+              />
+            )}
           </div>
-        )}
-      </main>
-
-      <ConnectionForm
-        key={formKey}
-        open={formOpen}
-        initial={formInitial}
-        all={items}
-        groups={list?.groups ?? []}
-        onOpenChange={setFormOpen}
-        onSaved={async (c) => {
-          setFormOpen(false);
-          await reload();
-          setSelectedId(c.id);
-        }}
-      />
-      <HostKeyDialog />
-
-      <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("删除连接 {0}?", removing?.name)}</AlertDialogTitle>
-            <AlertDialogDescription>{t("只删除连接配置, 保险库里的密码与私钥不受影响。")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("取消")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                const c = removing;
-                setRemoving(null);
-                if (!c) return;
-                try {
-                  await api.DeleteConnection(c.id);
-                  if (selectedId === c.id) setSelectedId("");
-                  await reload();
-                } catch (e) {
-                  toast.error(errorText(e));
-                }
-              }}
+          {update?.release && (
+            <button
+              type="button"
+              className="bg-accent text-accent-foreground mx-2 mb-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
+              onClick={() => openSettings("about")}
             >
-              {t("删除")}
-              </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+              <ArrowUpCircleIcon className="size-4 shrink-0" />
+              <span className="truncate">{t("新版本 {0} 可用, 点击更新", update.release.version)}</span>
+            </button>
+          )}
+          <StatusBar
+            sync={sync}
+            syncEnabled={syncEnabled}
+            onSync={syncNow}
+            onScripts={() => setScriptsOpen(true)}
+            onSettings={() => openSettings("general")}
+          />
+        </aside>
+
+        <main className="bg-background flex min-w-0 flex-1 flex-col">
+          <TerminalTabBar terms={terms} detailLabel={selected?.name ?? t("连接详情")} />
+          <div className="relative min-h-0 flex-1">
+            <div className={cn("h-full", terms.view !== DETAIL_VIEW && "hidden")}>
+              {selected ? (
+                <ConnectionDetail key={selected.id} c={selected} scripts={scriptItems} tab={tab} onTabChange={setTab} actions={actions} />
+              ) : (
+                <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-sm">
+                  <p>{t("选择左侧的连接, 双击直接连接")}</p>
+                </div>
+              )}
+            </div>
+            <TerminalPanes terms={terms} />
+          </div>
+        </main>
+
+        <ConnectionForm
+          key={formKey}
+          open={formOpen}
+          initial={formInitial}
+          all={items}
+          groups={list?.groups ?? []}
+          onOpenChange={setFormOpen}
+          onSaved={async (c) => {
+            setFormOpen(false);
+            await reload();
+            setSelectedId(c.id);
+          }}
+        />
+        <HostKeyDialog />
+
+        <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("删除连接 {0}?", removing?.name)}</AlertDialogTitle>
+              <AlertDialogDescription>{t("只删除连接配置, 保险库里的密码与私钥不受影响。")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t("取消")}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={async () => {
+                  const c = removing;
+                  setRemoving(null);
+                  if (!c) return;
+                  try {
+                    await api.DeleteConnection(c.id);
+                    if (selectedId === c.id) setSelectedId("");
+                    await reload();
+                  } catch (e) {
+                    toast.error(errorText(e));
+                  }
+                }}
+              >
+                {t("删除")}
+                </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </>
   );
+}
+
+/** 按会话 ID 取内置终端的描述, 用来新开标签。 */
+async function terminalInfo(id: string): Promise<TerminalInfo | null> {
+  const list = await api.ListTerminals();
+  return list.find((x) => x.id === id) ?? null;
 }

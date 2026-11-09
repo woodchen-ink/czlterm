@@ -4,7 +4,7 @@
 
 import * as App from "@/wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn } from "@/wailsjs/runtime/runtime";
-import type { conn, facts, launch, main, remotefs, script, settings, vault } from "@/wailsjs/go/models";
+import type { conn, facts, launch, main, remotefs, script, settings, term, vault } from "@/wailsjs/go/models";
 
 export type Connection = conn.Connection;
 export type ConnectionView = main.ConnectionView;
@@ -24,6 +24,7 @@ export type AboutInfo = main.AboutInfo;
 export type Facts = facts.Facts;
 export type Script = script.Script;
 export type ScriptList = main.ScriptList;
+export type TerminalInfo = term.Info;
 
 /** 主机密钥与 known_hosts 不符的提示, 对应 sshx.HostKeyChange (只经事件推送, 绑定里没有生成)。 */
 export interface HostKeyChange {
@@ -48,6 +49,7 @@ export const Events = {
   factsUpdated: "facts:updated",
   geoUpdated: "geo:updated",
   hostKeyChanged: "hostkey:changed",
+  terminalExit: "terminal:exit",
 } as const;
 
 /** 用系统浏览器打开外部链接。 */

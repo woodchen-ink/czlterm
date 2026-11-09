@@ -2,9 +2,9 @@
 
 [English](README.md) | 简体中文
 
-轻量的连接管理器。SSH、RDP、VNC 都交给系统自带或常用的客户端，czlterm 只负责管理连接、从 Vaultwarden 取凭据、管理远程文件，以及给 AI 提供 MCP 接口。
+轻量的连接管理器。SSH 在内置的多标签终端里运行系统 OpenSSH，RDP、VNC 交给系统自带或常用的客户端，czlterm 负责管理连接、从 Vaultwarden 取凭据、管理远程文件，以及给 AI 提供 MCP 接口。
 
-- **不内置终端和远程桌面**：SSH 在系统终端里打开（Terminal、iTerm2、Ghostty、WezTerm、kitty、Windows Terminal、PowerShell）；RDP 在 macOS 上用 Windows App，在 Windows 上用 mstsc；VNC 在 macOS 上用系统自带的屏幕共享，在 Windows 上用 TigerVNC
+- **内置终端，不内置远程桌面**：SSH 默认在程序里的终端标签中打开，可同时开多个；也可以在设置里改用系统终端（Terminal、iTerm2、Ghostty、WezTerm、kitty、Windows Terminal、PowerShell）。RDP 在 macOS 上用 Windows App，在 Windows 上用 mstsc；VNC 在 macOS 上用系统自带的屏幕共享，在 Windows 上用 TigerVNC
 - **凭据来自 Vaultwarden**：通过官方 `bw` CLI 读取密码和 SSH 私钥，不写入磁盘
 - **文件管理**：通过 SFTP 浏览、上传、下载、重命名、删除；双击文件会用 VS Code 等编辑器打开，保存后自动传回服务器
 - **MCP**：AI 客户端可以列出连接，并在你授权的服务器上读写文件、执行命令
@@ -20,7 +20,7 @@
 | | |
 |---|---|
 | ![SFTP 文件管理](docs/screenshots/files.webp) | ![一键在系统终端里打开 SSH](docs/screenshots/ssh-terminal.webp) |
-| SFTP 文件管理，双击用编辑器打开，保存后自动传回 | 连接时调起系统终端，私钥和密码由 czlterm 自动提供 |
+| SFTP 文件管理，双击用编辑器打开，保存后自动传回 | 连接时在终端标签（或系统终端）里打开，私钥和密码由 czlterm 自动提供 |
 | ![编辑连接：凭据引用 Vaultwarden 条目](docs/screenshots/edit-connection.webp) | ![MCP 设置](docs/screenshots/settings-mcp.webp) |
 | 凭据只引用 Vaultwarden 条目，配置里没有明文密码 | MCP 权限分级开关，支持多行脚本 |
 | ![同步设置](docs/screenshots/settings-sync.webp) | ![关于与在线更新](docs/screenshots/settings-about.webp) |

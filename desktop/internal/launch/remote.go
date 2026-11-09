@@ -40,6 +40,8 @@ type Result struct {
 	// PasswordCopied 为 true 时密码已复制到剪贴板, 将在 ClipboardSeconds 秒后清除。
 	PasswordCopied   bool `json:"passwordCopied"`
 	ClipboardSeconds int  `json:"clipboardSeconds"`
+	// TerminalID 非空时 ssh 在内置终端里运行, 界面切到该会话的标签。
+	TerminalID string `json:"terminalId,omitempty"`
 }
 
 // OpenRDP 用系统 RDP 客户端连接: Windows 为 mstsc, macOS 为 Windows App。

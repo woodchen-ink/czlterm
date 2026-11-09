@@ -75,6 +75,8 @@ func main() {
 		Menu:       appMenu(app),
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
+		// 退出前确认是否结束仍在运行的内置终端。
+		OnBeforeClose: app.beforeClose,
 		// 点 X 只隐藏到后台继续运行, 靠托盘图标 (macOS 为菜单栏图标) 或 Dock 唤回; 退出走托盘菜单 / ⌘Q。
 		HideWindowOnClose: runtime.GOOS == "windows" || runtime.GOOS == "darwin",
 		// 登录自启时只留托盘 / 菜单栏图标; 仅在有托盘的平台登记自启, 见 internal/autostart。

@@ -182,7 +182,7 @@ export function SettingsPage({
                       <SelectContent>
                         {view.terminals.map((terminal) => (
                           <SelectItem key={terminal.id} value={terminal.id} disabled={!terminal.installed}>
-                            {terminal.name}
+                            {terminal.id === "builtin" ? t("内置终端") : terminal.name}
                             {!terminal.installed && t(" (未安装)")}
                           </SelectItem>
                         ))}

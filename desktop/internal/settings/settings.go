@@ -17,8 +17,11 @@ import (
 
 // Settings 是全部本机设置。
 type Settings struct {
+	// Terminal 是运行 ssh 的终端: "builtin" 为内置终端 (launch.BuiltinTerminal), 其他值为外部终端 ID。
 	Terminal string `json:"terminal"`
-	Editor   string `json:"editor"`
+	// TerminalMigrated 标记旧版设置已切换过一次内置终端, 之后尊重用户的选择。
+	TerminalMigrated bool   `json:"terminalMigrated"`
+	Editor           string `json:"editor"`
 	// EditorPath 非空时忽略 Editor, 直接用该程序打开文件。
 	EditorPath string `json:"editorPath"`
 	// VNCViewerPath 是 Windows / Linux 上 VNC 查看器的路径, 为空时自动查找 TigerVNC。
@@ -71,20 +74,33 @@ func Open(configDir string, defaults Settings) (*Store, error) {
 	if err := json.Unmarshal(data, &s.cur); err != nil {
 		return s, fmt.Errorf("8002 parse settings: %w", err)
 	}
-	migrate(data, &s.cur)
+	if migrate(data, &s.cur) {
+		if _, err := s.Update(func(*Settings) {}); err != nil {
+			return s, err
+		}
+	}
 	return s, nil
 }
 
-// migrate 补齐旧版设置文件里没有的新字段, 让升级后的行为与升级前一致。
-func migrate(raw []byte, cur *Settings) {
+// migrate 补齐旧版设置文件里没有的新字段, 返回是否需要写回。
+func migrate(raw []byte, cur *Settings) bool {
 	var keys map[string]json.RawMessage
 	if json.Unmarshal(raw, &keys) != nil {
-		return
+		return false
 	}
+	changed := false
 	// mcpAllowAccess 是后加的总开关, 旧版里写文件 / 执行命令本身就隐含了访问服务器。
 	if _, ok := keys["mcpAllowAccess"]; !ok && (cur.MCPAllowWrite || cur.MCPAllowExec) {
 		cur.MCPAllowAccess = true
+		changed = true
 	}
+	// 内置终端上线时把所有人切过去一次, 想用外部终端的可以在设置里改回。
+	// 按键是否存在判断: cur 以调用方给的默认值为底, 默认值里 TerminalMigrated 为 true。
+	if _, ok := keys["terminalMigrated"]; !ok {
+		cur.Terminal, cur.TerminalMigrated = "builtin", true
+		changed = true
+	}
+	return changed
 }
 
 // Get 返回当前设置的副本。

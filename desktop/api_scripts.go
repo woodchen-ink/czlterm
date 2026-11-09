@@ -64,33 +64,34 @@ func (a *App) DeleteScript(id string) error {
 	return nil
 }
 
-// RunScript 在系统终端里连接 SSH 服务器并执行脚本, 执行完留在交互式 shell 里。
-func (a *App) RunScript(connID, scriptID string) error {
+// RunScript 在内置终端或系统终端里连接 SSH 服务器并执行脚本, 执行完留在交互式 shell 里。
+// 走内置终端时返回会话 ID, 系统终端返回空串。
+func (a *App) RunScript(connID, scriptID string) (string, error) {
 	if err := a.ready(); err != nil {
-		return err
+		return "", err
 	}
 	c, err := a.conns.Get(connID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if c.Protocol != conn.ProtoSSH {
-		return errors.New("4050 scripts can only run on ssh connections")
+		return "", errors.New("4050 scripts can only run on ssh connections")
 	}
 	// 默认 shell 是 cmd / PowerShell 的 Windows 主机跑不了 sh -c; 没采集过机器信息时放行。
 	if a.facts.Get(c.ID).OSID == "windows" {
-		return errors.New("4051 scripts are not supported on windows hosts")
+		return "", errors.New("4051 scripts are not supported on windows hosts")
 	}
 	s, err := a.scripts.Get(scriptID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	cmd, err := script.RemoteCommand(s.Content)
 	if err != nil {
-		return err
+		return "", err
 	}
 	hops, err := a.resolveChain(c)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return a.openSSH(c, hops, sshSession{title: c.Name + " · " + s.Name, command: cmd})
+	return a.openSSH(c, hops, sshSession{title: c.Name + " · " + s.Name, command: cmd, scriptID: s.ID})
 }

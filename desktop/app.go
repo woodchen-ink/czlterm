@@ -54,10 +54,11 @@ type App struct {
 	pool     *sshx.Pool
 	dataDir  string
 
-	mcp     mcpState
-	edits   editState
-	sync    syncState
-	updates updateState
+	mcp      mcpState
+	terminal terminalState
+	edits    editState
+	sync     syncState
+	updates  updateState
 
 	// initErr 是启动阶段的致命错误 (数据目录不可用), 界面据此显示错误页而不是空列表。
 	initErr error
@@ -66,6 +67,8 @@ type App struct {
 	uiEnglish atomic.Bool
 	// quitting 在退出流程中置位: 退出时也会锁定保险库, 但不该删掉「记住解锁」保存的会话。
 	quitting atomic.Bool
+	// forceQuit 跳过退出确认, 自动更新已启动安装程序时置位。
+	forceQuit atomic.Bool
 }
 
 // NewApp 创建 App。重活放在 startup, 以便窗口先出来。
@@ -107,7 +110,8 @@ func (a *App) init() error {
 		return err
 	}
 	a.settings, err = settings.Open(cfgDir, settings.Settings{
-		Terminal:             launch.DefaultTerminal(),
+		Terminal:             launch.BuiltinTerminal,
+		TerminalMigrated:     true,
 		Editor:               "vscode",
 		VaultAutoLockMinutes: 0,
 		VaultRemember:        true,
@@ -146,6 +150,7 @@ func (a *App) shutdown(context.Context) {
 	a.quitting.Store(true)
 	a.stopTray()
 	a.stopMCP()
+	a.stopTerminals()
 	a.edits.stopAll()
 	a.pool.CloseAll()
 	a.agents.CloseAll()
