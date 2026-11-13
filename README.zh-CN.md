@@ -2,9 +2,9 @@
 
 [English](README.md) | 简体中文
 
-轻量的连接管理器。SSH 在内置的多标签终端里运行系统 OpenSSH，RDP、VNC 交给系统自带或常用的客户端，czlterm 负责管理连接、从 Vaultwarden 取凭据、管理远程文件，以及给 AI 提供 MCP 接口。
+轻量的连接管理器。SSH 在内置的多标签终端里运行系统 OpenSSH，VNC 在内置查看器里打开，RDP 交给系统自带的客户端，czlterm 负责管理连接、从 Vaultwarden 取凭据、管理远程文件，以及给 AI 提供 MCP 接口。
 
-- **内置终端，不内置远程桌面**：SSH 默认在程序里的终端标签中打开，可同时开多个；也可以在设置里改用系统终端（Terminal、iTerm2、Ghostty、WezTerm、kitty、Windows Terminal、PowerShell）。RDP 在 macOS 上用 Windows App，在 Windows 上用 mstsc；VNC 在 macOS 上用系统自带的屏幕共享，在 Windows 上用 TigerVNC
+- **内置终端与 VNC 查看器**：SSH 默认在程序里的终端标签中打开，可同时开多个；也可以在设置里改用系统终端（Terminal、iTerm2、Ghostty、WezTerm、kitty、Windows Terminal、PowerShell）。VNC 在标签页里打开（noVNC），连 Mac 时自动填用户名和密码，画面随窗口缩放，可弹出成独立窗口；也可以在设置里改用屏幕共享（macOS）或 TigerVNC（Windows）。RDP 在 macOS 上用 Windows App，在 Windows 上用 mstsc
 - **凭据来自 Vaultwarden**：通过官方 `bw` CLI 读取密码和 SSH 私钥，不写入磁盘
 - **文件管理**：通过 SFTP 浏览、上传、下载、重命名、删除；双击文件会用 VS Code 等编辑器打开，保存后自动传回服务器
 - **MCP**：AI 客户端可以列出连接，并在你授权的服务器上读写文件、执行命令
@@ -34,12 +34,13 @@
 | SSH 密码 | 通过 `SSH_ASKPASS` 回调 czlterm，凭一次性令牌取密码；只选密码时不尝试公钥认证。主机指纹确认等其它提示仍由你自己回答 |
 | RDP（Windows） | 临时写入凭据管理器 `TERMSRV/<host>`，2 分钟后还原：原来存过这台主机的凭据就写回去，没有就删除 |
 | RDP（macOS） | Windows App 不接受外部传入的密码，所以把密码复制到剪贴板，45 秒后清除 |
-| VNC（macOS） | 用 `vnc://` 链接打开屏幕共享。密码不放进链接（链接是命令行参数，同机其他用户能看到），而是复制到剪贴板，45 秒后清除 |
-| VNC（Windows） | 给 TigerVNC 生成 `-passwd` 文件，2 分钟后删除；其它查看器改用剪贴板 |
+| VNC（内置） | 用户名和密码交给程序里的查看器页面，画面经 127.0.0.1 上带令牌的 WebSocket 转发，不落盘 |
+| VNC（屏幕共享，macOS） | 用 `vnc://` 链接打开屏幕共享。密码不放进链接（链接是命令行参数，同机其他用户能看到），而是复制到剪贴板，45 秒后清除 |
+| VNC（TigerVNC，Windows） | 给 TigerVNC 生成 `-passwd` 文件，2 分钟后删除；其它查看器改用剪贴板 |
 
 选择保险库认证时，只使用所选条目，不读取系统 agent、默认私钥或 `~/.ssh/config`；条目缺少密码或私钥会直接报错，不回退系统认证。跳板链每一跳独立选择认证来源；只有「系统默认」读取系统认证配置。临时 SSH 配置不含密码或私钥，在终端命令结束后删除。
 
-保险库锁定（手动锁定或空闲超时）或退出程序时，agent 端点、进程内的 SSH 连接和 bw 会话都会被清除。
+保险库锁定（手动锁定或空闲超时）或退出程序时，agent 端点、进程内的 SSH 连接、VNC 会话里留着用于重连的密码和 bw 会话都会被清除。
 
 可以在「设置 → 保险库」里打开「记住解锁」：bw 会话密钥存进系统钥匙串，重启 czlterm 不用再输主密码。手动锁定或空闲超时锁定时会一并删除。
 

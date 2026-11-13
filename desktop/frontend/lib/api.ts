@@ -3,8 +3,9 @@
  */
 
 import * as App from "@/wailsjs/go/main/App";
+import * as VNCWindow from "@/wailsjs/go/main/VNCWindow";
 import { BrowserOpenURL, EventsOn } from "@/wailsjs/runtime/runtime";
-import type { conn, facts, launch, main, remotefs, script, settings, term, vault } from "@/wailsjs/go/models";
+import type { conn, facts, launch, main, remotefs, script, settings, term, vault, vnc } from "@/wailsjs/go/models";
 
 export type Connection = conn.Connection;
 export type ConnectionView = main.ConnectionView;
@@ -25,6 +26,8 @@ export type Facts = facts.Facts;
 export type Script = script.Script;
 export type ScriptList = main.ScriptList;
 export type TerminalInfo = term.Info;
+export type VNCSession = vnc.Info;
+export type VNCWindowParams = main.VNCWindowParams;
 
 /** 主机密钥与 known_hosts 不符的提示, 对应 sshx.HostKeyChange (只经事件推送, 绑定里没有生成)。 */
 export interface HostKeyChange {
@@ -37,6 +40,8 @@ export interface HostKeyChange {
 export type Protocol = "ssh" | "rdp" | "vnc";
 
 export const api = App;
+/** 独立 VNC 窗口进程里的绑定, 主窗口里只有空参数。 */
+export const vncWindow = VNCWindow;
 
 /** 后端推送的事件名, 与 app.go 中的常量一致。 */
 export const Events = {
@@ -51,6 +56,32 @@ export const Events = {
   hostKeyChanged: "hostkey:changed",
   terminalExit: "terminal:exit",
 } as const;
+
+/**
+ * 当前页面是否是弹出的独立 VNC 窗口。独立窗口进程只绑定 VNCWindow, 没有 App;
+ * 浏览器预览两者都没有, 按主窗口处理。
+ */
+export function isVNCWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  const main = (window as { go?: { main?: Record<string, unknown> } }).go?.main;
+  return !!main?.VNCWindow && !main.App;
+}
+
+/** 本机 WebSocket 根地址 (ws://127.0.0.1:端口) 与令牌, 终端在 /terminal, VNC 在 /vnc。 */
+export interface LocalEndpoint {
+  url: string;
+  token: string;
+}
+
+let endpoint: Promise<LocalEndpoint> | null = null;
+/** 主窗口的本机 WebSocket 端点在本次运行内不变, 取一次缓存起来。 */
+export function localEndpoint(): Promise<LocalEndpoint> {
+  endpoint ??= App.GetTerminalEndpoint().catch((e) => {
+    endpoint = null;
+    throw e;
+  });
+  return endpoint;
+}
 
 /** 用系统浏览器打开外部链接。 */
 export function openExternal(url: string) {

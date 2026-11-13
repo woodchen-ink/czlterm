@@ -212,7 +212,27 @@ export function SettingsPage({
                       ? t(" Windows App (App Store)。它不接受外部传入的密码, 连接时密码复制到剪贴板, 45 秒后清除。")
                       : t("系统远程桌面 (mstsc), 密码自动填入。")}
                   </p>
-                  {view.os !== "darwin" && (
+                  <Field
+                    label={t("VNC 查看器")}
+                    hint={
+                      form.vncViewer === "external"
+                        ? view.os === "darwin"
+                          ? t("用系统屏幕共享打开, 密码复制到剪贴板, 45 秒后清除")
+                          : t("TigerVNC 只能自动填 VNC 密码, 不支持 macOS 的用户名 + 密码认证, 画面也不能缩放")
+                        : t("在标签页里打开, 自动填入用户名与密码, 画面随窗口缩放, 可弹出到独立窗口")
+                    }
+                  >
+                    <Select value={form.vncViewer} onValueChange={(v) => set("vncViewer", v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="builtin">{t("内置查看器")}</SelectItem>
+                        <SelectItem value="external">{view.os === "darwin" ? t("系统屏幕共享") : t("外部程序 (TigerVNC 等)")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {view.os !== "darwin" && form.vncViewer === "external" && (
                     <Field label={t("VNC 查看器路径")} hint={t("留空时自动查找 TigerVNC; 其它查看器无法自动填密码, 会改用剪贴板")}>
                       <Input
                         value={form.vncViewerPath}

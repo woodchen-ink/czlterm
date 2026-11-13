@@ -8,10 +8,12 @@ import (
 
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
+	"github.com/woodchen-ink/czlterm/desktop/internal/settings"
 	"github.com/woodchen-ink/czlterm/desktop/internal/term"
+	"github.com/woodchen-ink/czlterm/desktop/internal/vnc"
 )
 
-// Connect 打开连接: SSH 在内置终端或系统终端里运行, RDP 开系统远程桌面客户端, VNC 开系统 VNC 查看器。
+// Connect 打开连接: SSH 在内置终端或系统终端里运行, RDP 开系统远程桌面客户端, VNC 在内置查看器或系统 VNC 查看器里打开。
 func (a *App) Connect(id string) (launch.Result, error) {
 	if err := a.ready(); err != nil {
 		return launch.Result{}, err
@@ -36,6 +38,10 @@ func (a *App) Connect(id string) (launch.Result, error) {
 		}
 		return launch.OpenRDP(launch.Remote{Host: c.Host, Port: c.Port, Username: target.user, Password: target.password}, clipboard{a.ctx})
 	case conn.ProtoVNC:
+		if cfg.VNCViewer == settings.VNCBuiltin {
+			return a.openVNC(vnc.Target{ConnID: c.ID, Title: c.Name, Host: c.Host, Port: c.Port,
+				Username: target.user, Password: target.password})
+		}
 		return launch.OpenVNC(launch.Remote{Host: c.Host, Port: c.Port, Username: target.user, Password: target.password,
 			ViewerPath: cfg.VNCViewerPath}, clipboard{a.ctx})
 	}

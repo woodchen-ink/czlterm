@@ -42,6 +42,8 @@ type Result struct {
 	ClipboardSeconds int  `json:"clipboardSeconds"`
 	// TerminalID 非空时 ssh 在内置终端里运行, 界面切到该会话的标签。
 	TerminalID string `json:"terminalId,omitempty"`
+	// VNCID 非空时 VNC 在内置查看器里打开, 界面为该会话新开标签。
+	VNCID string `json:"vncId,omitempty"`
 }
 
 // OpenRDP 用系统 RDP 客户端连接: Windows 为 mstsc, macOS 为 Windows App。

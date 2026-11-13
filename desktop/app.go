@@ -56,6 +56,7 @@ type App struct {
 
 	mcp      mcpState
 	terminal terminalState
+	vnc      vncState
 	edits    editState
 	sync     syncState
 	updates  updateState
@@ -112,6 +113,7 @@ func (a *App) init() error {
 	a.settings, err = settings.Open(cfgDir, settings.Settings{
 		Terminal:             launch.BuiltinTerminal,
 		TerminalMigrated:     true,
+		VNCViewer:            settings.VNCBuiltin,
 		Editor:               "vscode",
 		VaultAutoLockMinutes: 0,
 		VaultRemember:        true,
@@ -171,6 +173,7 @@ func (a *App) onVaultLocked() {
 	}
 	a.agents.CloseAll()
 	a.pool.CloseAll()
+	a.vncs().ForgetPasswords()
 	if a.ctx != nil {
 		wruntime.EventsEmit(a.ctx, eventVaultLocked)
 	}

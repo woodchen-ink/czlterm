@@ -15,6 +15,14 @@ import (
 	"sync"
 )
 
+// VNC 查看器取值。
+const (
+	// VNCBuiltin 在应用内的 noVNC 标签里打开, 默认值。
+	VNCBuiltin = "builtin"
+	// VNCExternal 调系统 VNC 查看器: macOS 为屏幕共享, 其他系统为 TigerVNC 或 VNCViewerPath。
+	VNCExternal = "external"
+)
+
 // Settings 是全部本机设置。
 type Settings struct {
 	// Terminal 是运行 ssh 的终端: "builtin" 为内置终端 (launch.BuiltinTerminal), 其他值为外部终端 ID。
@@ -24,7 +32,9 @@ type Settings struct {
 	Editor           string `json:"editor"`
 	// EditorPath 非空时忽略 Editor, 直接用该程序打开文件。
 	EditorPath string `json:"editorPath"`
-	// VNCViewerPath 是 Windows / Linux 上 VNC 查看器的路径, 为空时自动查找 TigerVNC。
+	// VNCViewer 是 VNCBuiltin 或 VNCExternal; 旧设置文件里没有这个键, 取调用方给的默认值 (内置)。
+	VNCViewer string `json:"vncViewer"`
+	// VNCViewerPath 是 Windows / Linux 上外部 VNC 查看器的路径, 为空时自动查找 TigerVNC。
 	VNCViewerPath string `json:"vncViewerPath"`
 
 	// BWPath 是 bw CLI 路径, 为空时在 PATH 中查找。
@@ -119,6 +129,9 @@ func (s *Store) Update(fn func(*Settings)) (Settings, error) {
 	next.BWPath = strings.TrimSpace(next.BWPath)
 	next.EditorPath = strings.TrimSpace(next.EditorPath)
 	next.VNCViewerPath = strings.TrimSpace(next.VNCViewerPath)
+	if next.VNCViewer != VNCExternal {
+		next.VNCViewer = VNCBuiltin
+	}
 	next.GitRemote = strings.TrimSpace(next.GitRemote)
 	next.GitUsername = strings.TrimSpace(next.GitUsername)
 	if next.VaultAutoLockMinutes < 0 {

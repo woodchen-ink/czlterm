@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LayoutListIcon, XIcon } from "lucide-react";
+import { LayoutListIcon, MonitorIcon, SquareArrowOutUpRightIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { useLanguage } from "@/components/language-provider";
 import { TERMINAL_BACKGROUND, TerminalView } from "@/components/terminal-view";
+import { ToolButton, VNCView, WithTip } from "@/components/vnc-view";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,25 +17,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { api, Events, onEvent, type TerminalInfo } from "@/lib/api";
+import { api, Events, localEndpoint, onEvent, type TerminalInfo } from "@/lib/api";
 import { errorText } from "@/lib/errors";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-/** 主区域显示的视图: 连接详情或某个终端会话。 */
+/** 主区域显示的视图: 连接详情或某个终端 / VNC 会话。 */
 export const DETAIL_VIEW = "detail";
 
 export interface TerminalTab {
+  /** ssh 是内置终端, vnc 是内置 VNC 查看器。 */
+  kind: "ssh" | "vnc";
   id: string;
   connId: string;
   scriptId: string;
   title: string;
+  /** 终端为命令已退出, VNC 为未连着服务器。 */
   exited: boolean;
   exitCode: number;
 }
 
+/** 新开 VNC 标签所需的信息。 */
+export interface VNCTabInfo {
+  id: string;
+  connId: string;
+  title: string;
+}
+
 function fromInfo(i: TerminalInfo): TerminalTab {
-  return { id: i.id, connId: i.connId, scriptId: i.scriptId, title: i.title, exited: i.exited, exitCode: i.exitCode };
+  return { kind: "ssh", id: i.id, connId: i.connId, scriptId: i.scriptId, title: i.title, exited: i.exited, exitCode: i.exitCode };
 }
 
 /**
@@ -89,18 +100,40 @@ export function useTerminalTabs(relaunch: (tab: TerminalTab) => Promise<Terminal
     setView(info.id);
   }, []);
 
+  const openVNC = useCallback((info: VNCTabInfo) => {
+    setTabs((cur) => [...cur, { kind: "vnc", id: info.id, connId: info.connId, scriptId: "", title: info.title, exited: true, exitCode: 0 }]);
+    setView(info.id);
+  }, []);
+
   const close = useCallback(async (id: string) => {
+    const tab = tabsRef.current.find((x) => x.id === id);
     try {
-      await api.CloseTerminal(id);
+      if (tab?.kind === "vnc") await api.CloseVNC(id);
+      else await api.CloseTerminal(id);
     } catch {
       /* 会话已不存在时照样移除标签 */
     }
     setTabs((cur) => cur.filter((x) => x.id !== id));
   }, []);
 
+  /** 把 VNC 会话移到独立窗口: 后端会话留给窗口, 这里只移除标签。 */
+  const popOut = useCallback(async (id: string) => {
+    try {
+      await api.PopOutVNC(id);
+      setTabs((cur) => cur.filter((x) => x.id !== id));
+    } catch (e) {
+      toast.error(errorText(e));
+    }
+  }, []);
+
   const rename = useCallback(async (id: string, title: string) => {
     const next = title.trim();
     if (!next) return;
+    // VNC 标题只在界面上, 后端不记。
+    if (tabsRef.current.find((x) => x.id === id)?.kind === "vnc") {
+      setTabs((cur) => cur.map((x) => (x.id === id ? { ...x, title: next } : x)));
+      return;
+    }
     try {
       await api.RenameTerminal(id, next);
       setTabs((cur) => cur.map((x) => (x.id === id ? { ...x, title: next } : x)));
@@ -139,7 +172,11 @@ export function useTerminalTabs(relaunch: (tab: TerminalTab) => Promise<Terminal
     setTabs((cur) => cur.map((x) => (x.id === id ? { ...x, exited: true, exitCode: code } : x)));
   }, []);
 
-  return { tabs, view, setView, open, close, rename, reconnect, markExited };
+  const markConnected = useCallback((id: string, connected: boolean) => {
+    setTabs((cur) => cur.map((x) => (x.id === id && x.exited === connected ? { ...x, exited: !connected } : x)));
+  }, []);
+
+  return { tabs, view, setView, open, openVNC, close, popOut, rename, reconnect, markExited, markConnected };
 }
 
 type Terminals = ReturnType<typeof useTerminalTabs>;
@@ -170,10 +207,16 @@ export function TerminalTabBar({ terms, detailLabel }: { terms: Terminals; detai
           onMiddleClick={() => requestClose(tab)}
           onDoubleClick={() => setEditing(tab.id)}
         >
-          <span
-            className={cn("size-1.5 shrink-0 rounded-full", tab.exited ? "bg-muted-foreground/50" : "bg-emerald-500")}
-            title={tab.exited ? t("已断开") : t("已连接")}
-          />
+          {tab.kind === "vnc" ? (
+            <span title={tab.exited ? t("已断开") : t("已连接")}>
+              <MonitorIcon className={cn("size-3.5 shrink-0", tab.exited ? "text-muted-foreground/60" : "text-emerald-500")} />
+            </span>
+          ) : (
+            <span
+              className={cn("size-1.5 shrink-0 rounded-full", tab.exited ? "bg-muted-foreground/50" : "bg-emerald-500")}
+              title={tab.exited ? t("已断开") : t("已连接")}
+            />
+          )}
           {editing === tab.id ? (
             <input
               autoFocus
@@ -198,7 +241,7 @@ export function TerminalTabBar({ terms, detailLabel }: { terms: Terminals; detai
           <span
             role="button"
             tabIndex={-1}
-            aria-label={t("关闭终端")}
+            aria-label={t("关闭")}
             className="hover:bg-accent text-muted-foreground hover:text-foreground -mr-1 rounded-sm p-0.5"
             onClick={(e) => {
               e.stopPropagation();
@@ -213,7 +256,7 @@ export function TerminalTabBar({ terms, detailLabel }: { terms: Terminals; detai
       <AlertDialog open={!!closing} onOpenChange={(o) => !o && setClosing(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("关闭终端 {0}?", closing?.title)}</AlertDialogTitle>
+            <AlertDialogTitle>{t("关闭 {0}?", closing?.title)}</AlertDialogTitle>
             <AlertDialogDescription>{t("连接还在运行, 关闭会断开它。")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -265,7 +308,9 @@ function TabButton({
   );
 }
 
-/** 全部终端会话的显示。切走的标签只隐藏不卸载, 内容与滚动位置都在。 */
+const vncCredentials = (id: string) => () => api.GetVNCSession(id);
+
+/** 全部终端与 VNC 会话的显示。切走的标签只隐藏不卸载, 内容、滚动位置与 VNC 连接都在。 */
 export function TerminalPanes({ terms }: { terms: Terminals }) {
   return (
     <>
@@ -275,12 +320,31 @@ export function TerminalPanes({ terms }: { terms: Terminals }) {
           className={cn("absolute inset-0", terms.view !== tab.id && "invisible")}
           style={{ background: TERMINAL_BACKGROUND }}
         >
-          <TerminalView
-            sessionId={tab.id}
-            active={terms.view === tab.id}
-            onExit={(code) => terms.markExited(tab.id, code)}
-            onReconnect={() => void terms.reconnect(tab)}
-          />
+          {tab.kind === "vnc" ? (
+            <VNCView
+              sessionId={tab.id}
+              title={tab.title}
+              active={terms.view === tab.id}
+              endpoint={localEndpoint}
+              credentials={vncCredentials(tab.id)}
+              onConnectedChange={(on) => terms.markConnected(tab.id, on)}
+              onCredentials={(c) => void api.SetVNCCredentials(tab.id, c.username, c.password).catch(() => {})}
+              actions={
+                <WithTip label={t("在独立窗口中打开")}>
+                  <ToolButton label={t("在独立窗口中打开")} onClick={() => void terms.popOut(tab.id)}>
+                    <SquareArrowOutUpRightIcon />
+                  </ToolButton>
+                </WithTip>
+              }
+            />
+          ) : (
+            <TerminalView
+              sessionId={tab.id}
+              active={terms.view === tab.id}
+              onExit={(code) => terms.markExited(tab.id, code)}
+              onReconnect={() => void terms.reconnect(tab)}
+            />
+          )}
         </div>
       ))}
     </>

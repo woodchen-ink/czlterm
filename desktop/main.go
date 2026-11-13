@@ -39,6 +39,10 @@ func main() {
 	if askpass.Active() {
 		os.Exit(askpass.Run(os.Args[1:]))
 	}
+	// 主程序弹出的独立 VNC 窗口, 见 vnc_window.go。
+	if len(os.Args) > 1 && os.Args[1] == vncWindowArg {
+		os.Exit(runVNCWindow())
+	}
 	// `czlterm mcp` 作为 MCP stdio 桥运行, 不启动窗口。
 	if len(os.Args) > 1 && os.Args[1] == "mcp" {
 		os.Exit(mcpbridge.Run(version))
@@ -81,7 +85,8 @@ func main() {
 		HideWindowOnClose: runtime.GOOS == "windows" || runtime.GOOS == "darwin",
 		// 登录自启时只留托盘 / 菜单栏图标; 仅在有托盘的平台登记自启, 见 internal/autostart。
 		StartHidden: autostart.Launched(),
-		Bind:        []any{app},
+		// VNCWindow 在主窗口里为空, 只为生成独立 VNC 窗口用的前端绑定。
+		Bind: []any{app, &VNCWindow{}},
 		Windows: &windows.Options{
 			WebviewUserDataPath: webviewDir,
 		},

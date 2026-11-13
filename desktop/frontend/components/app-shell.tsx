@@ -177,6 +177,7 @@ function Shell() {
   );
   const terms = useTerminalTabs(relaunch);
   const openTerminal = terms.open;
+  const openVNC = terms.openVNC;
 
   // 运行脚本与连接一样可能要先解锁保险库。
   const runScript = useCallback(
@@ -201,6 +202,10 @@ function Shell() {
       connect: async (c) => {
         try {
           const r = await withVault(() => api.Connect(c.id));
+          if (r.vncId) {
+            openVNC({ id: r.vncId, connId: c.id, title: c.name });
+            return;
+          }
           const info = r.terminalId ? await terminalInfo(r.terminalId) : null;
           // 走内置终端但会话已经结束 (秒退) 时不再提示「正在打开」。
           if (info) openTerminal(info);
@@ -234,7 +239,7 @@ function Shell() {
       runScript,
       manageScripts: () => setScriptsOpen(true),
     }),
-    [withVault, reload, runScript, openTerminal, showDetail],
+    [withVault, reload, runScript, openTerminal, openVNC, showDetail],
   );
 
   function create(protocol: Protocol) {

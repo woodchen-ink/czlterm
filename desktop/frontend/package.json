@@ -10,6 +10,7 @@
     "test": "node --test lib/*.test.mjs components/*.test.mjs"
   },
   "dependencies": {
+    "@novnc/novnc": "1.7.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/addon-web-links": "^0.12.0",

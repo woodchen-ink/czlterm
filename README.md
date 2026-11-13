@@ -2,9 +2,9 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A lightweight connection manager. SSH runs your system OpenSSH in a built-in tabbed terminal, RDP and VNC open in the clients you already have; czlterm manages the connections, pulls credentials from Vaultwarden, browses remote files, and exposes your servers to AI clients over MCP.
+A lightweight connection manager. SSH runs your system OpenSSH in a built-in tabbed terminal, VNC opens in a built-in viewer, RDP opens in the client you already have; czlterm manages the connections, pulls credentials from Vaultwarden, browses remote files, and exposes your servers to AI clients over MCP.
 
-- **Built-in terminal, no built-in remote desktop**: SSH opens in terminal tabs inside the app, several at once; you can switch to your system terminal in settings (Terminal, iTerm2, Ghostty, WezTerm, kitty, Windows Terminal, PowerShell). RDP uses Windows App on macOS and mstsc on Windows; VNC uses the built-in Screen Sharing on macOS and TigerVNC on Windows
+- **Built-in terminal and VNC viewer**: SSH opens in terminal tabs inside the app, several at once; you can switch to your system terminal in settings (Terminal, iTerm2, Ghostty, WezTerm, kitty, Windows Terminal, PowerShell). VNC opens in a tab (noVNC): it signs in to a Mac with username and password, scales the screen to the window and can pop out into its own window; you can switch to Screen Sharing (macOS) or TigerVNC (Windows) in settings. RDP uses Windows App on macOS and mstsc on Windows
 - **Credentials from Vaultwarden**: passwords and SSH private keys are read through the official `bw` CLI and never written to disk
 - **File manager**: browse, upload, download, rename and delete over SFTP; double-click a file to open it in VS Code (or your editor of choice), and it is uploaded back when you save
 - **MCP**: AI clients can list your connections and, on servers you allow, read and write files and run commands
@@ -61,12 +61,13 @@ Introduction and discussion (Chinese): [SunAI forum thread](https://www.sunai.ne
 | SSH password | ssh calls back into czlterm through `SSH_ASKPASS` and fetches the password with a one-time token. Password-only connections do not attempt public-key authentication; other prompts such as host key confirmation remain interactive |
 | RDP (Windows) | Written temporarily to Credential Manager as `TERMSRV/<host>` and restored after 2 minutes: a credential you had saved for that host is put back, otherwise it is deleted |
 | RDP (macOS) | Windows App does not accept passwords from outside, so the password is copied to the clipboard and cleared after 45 seconds |
-| VNC (macOS) | Screen Sharing is opened with a `vnc://` link. The password is not put in the link (command-line arguments are visible to other local users); it goes to the clipboard and is cleared after 45 seconds |
-| VNC (Windows) | A `-passwd` file is generated for TigerVNC and deleted after 2 minutes; other viewers fall back to the clipboard |
+| VNC (built-in) | The username and password are handed to the viewer page in the app; screen data is relayed through a token-protected WebSocket on 127.0.0.1. Nothing is written to disk |
+| VNC (Screen Sharing, macOS) | Screen Sharing is opened with a `vnc://` link. The password is not put in the link (command-line arguments are visible to other local users); it goes to the clipboard and is cleared after 45 seconds |
+| VNC (TigerVNC, Windows) | A `-passwd` file is generated for TigerVNC and deleted after 2 minutes; other viewers fall back to the clipboard |
 
 Vault authentication uses only the selected items, without reading the system agent, default private keys or `~/.ssh/config`. Missing credentials fail explicitly rather than falling back to system authentication. Each jump hop has its own authentication source; only "System default" reads system authentication settings. Temporary SSH configs contain no passwords or private keys and are removed after the terminal command exits.
 
-Locking the vault (manually or after the idle timeout) or quitting clears the agent endpoints, in-process SSH connections and the bw session.
+Locking the vault (manually or after the idle timeout) or quitting clears the agent endpoints, in-process SSH connections, VNC passwords held for reconnecting and the bw session.
 
 Optionally turn on "Remember unlock" in Settings → Vault: the bw session key is kept in the system keychain so you don't retype the master password after restarting czlterm. Locking manually or by idle timeout deletes it.
 

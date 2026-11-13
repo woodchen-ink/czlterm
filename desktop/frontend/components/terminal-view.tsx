@@ -9,7 +9,7 @@ import type { SearchAddon } from "@xterm/addon-search";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { api, openExternal } from "@/lib/api";
+import { localEndpoint, openExternal, type LocalEndpoint } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { ClipboardGetText, ClipboardSetText } from "@/wailsjs/runtime/runtime";
 
@@ -40,16 +40,6 @@ const theme = {
 };
 
 const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
-
-let endpoint: Promise<{ url: string; token: string }> | null = null;
-/** 终端 WebSocket 地址与令牌在本次运行内不变, 取一次缓存起来。 */
-function terminalEndpoint() {
-  endpoint ??= api.GetTerminalEndpoint().catch((e) => {
-    endpoint = null;
-    throw e;
-  });
-  return endpoint;
-}
 
 /**
  * 一个内置终端会话的显示。会话归后端, 这里只是观看者: 连上时后端先回放最近输出再转发实时输出,
@@ -187,15 +177,15 @@ export function TerminalView({
       cleanups.push(() => observer.disconnect());
 
       const connect = async () => {
-        let ep: { url: string; token: string };
+        let ep: LocalEndpoint;
         try {
-          ep = await terminalEndpoint();
+          ep = await localEndpoint();
         } catch {
           scheduleRetry();
           return;
         }
         if (disposed) return;
-        const sock = new WebSocket(`${ep.url}?id=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(ep.token)}`);
+        const sock = new WebSocket(`${ep.url}/terminal?id=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(ep.token)}`);
         sock.binaryType = "arraybuffer";
         let opened = false;
         sock.onopen = () => {

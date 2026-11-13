@@ -1,5 +1,5 @@
-import { AppShell } from "@/components/app-shell";
+import { WindowRoot } from "@/components/window-root";
 
 export default function Page() {
-  return <AppShell />;
+  return <WindowRoot />;
 }
