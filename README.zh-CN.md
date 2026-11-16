@@ -49,10 +49,7 @@
 从 [Releases](https://github.com/woodchen-ink/czlterm/releases) 下载：
 
 - **Windows**：`czlterm-amd64-installer.exe`，按用户安装到 `%LOCALAPPDATA%\CZL\czlterm`，不需要管理员权限
-- **macOS**：`czlterm-darwin-universal.dmg`，Intel 和 Apple Silicon 通用。应用没有 Apple 开发者签名，第一次打开如果提示"已损坏"，执行一次：
-  ```bash
-  xattr -dr com.apple.quarantine /Applications/czlterm.app
-  ```
+- **macOS**：`czlterm-darwin-universal.dmg`，Intel 和 Apple Silicon 通用。已用 Developer ID 证书签名并通过 Apple 公证，打开 DMG 把 czlterm 拖进「应用程序」即可
 
 介绍与讨论：[SunAI 论坛帖](https://www.sunai.net/t/topic/1533)
 

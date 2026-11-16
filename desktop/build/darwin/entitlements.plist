@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Developer ID 签名 (hardened runtime) 用的 entitlements, 由 .github/workflows/release.yml 引用。
+  只开 Apple Events: 外部终端模式用 osascript 调起 iTerm2 / Terminal, hardened runtime 下没有这一项
+  系统会直接拒绝而不弹授权框 (用途说明见 Info.plist 的 NSAppleEventsUsageDescription)。
+  Go 程序不需要 JIT / 未签名可执行内存, WKWebView 的 JIT 在系统的 WebContent 进程里;
+  askpass、ssh-proxy、vnc-window 都是本程序自身再启动, 内置终端与 VNC 的本机端口也不需要额外权限。
+  不走 App Sandbox (com.apple.security.app-sandbox), 否则托盘、开机自启、调用系统 ssh 都会失效。
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>

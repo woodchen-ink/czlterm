@@ -33,10 +33,7 @@ A lightweight connection manager. SSH runs your system OpenSSH in a built-in tab
 Download from [Releases](https://github.com/woodchen-ink/czlterm/releases):
 
 - **Windows**: `czlterm-amd64-installer.exe`, installs per user into `%LOCALAPPDATA%\CZL\czlterm`, no admin rights needed
-- **macOS**: `czlterm-darwin-universal.dmg`, universal for Intel and Apple Silicon. The app is not signed with an Apple developer certificate; if macOS says it is damaged on first launch, run once:
-  ```bash
-  xattr -dr com.apple.quarantine /Applications/czlterm.app
-  ```
+- **macOS**: `czlterm-darwin-universal.dmg`, universal for Intel and Apple Silicon. Signed with a Developer ID certificate and notarized by Apple; open the DMG and drag czlterm into Applications
 
 Introduction and discussion (Chinese): [SunAI forum thread](https://www.sunai.net/t/topic/1533)
 
