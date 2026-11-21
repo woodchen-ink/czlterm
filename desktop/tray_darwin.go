@@ -7,7 +7,7 @@ package main
 #cgo LDFLAGS: -framework Cocoa
 #include <stdlib.h>
 
-void czlTrayStart(const void *png, int length);
+void czlTrayStart(const void *png1x, int length1x, const void *png2x, int length2x);
 void czlTrayStop(void);
 void czlTrayLanguage(int english);
 void czlActivateApp(void);
@@ -27,15 +27,22 @@ import (
 // 这里只往 Wails 已经在跑的主线程上挂一个状态栏项, 另外补上 Dock 图标点击时恢复窗口 ——
 // Wails 的 AppDelegate 没有实现 applicationShouldHandleReopen, 窗口隐藏后点 Dock 不会出来。
 
-//go:embed build/appicon.png
-var appIconPNG []byte
+// 菜单栏用 template 单色图标 (纯黑 + alpha, 系统按菜单栏主题着色), 18pt 的 1x / 2x 两份。
+// 由 docs/design/brand/build-icons.js 生成。
+
+//go:embed build/tray/template.png
+var trayTemplate1x []byte
+
+//go:embed build/tray/template@2x.png
+var trayTemplate2x []byte
 
 var trayApp atomic.Pointer[App]
 
 func (a *App) startTray() {
 	trayApp.Store(a)
-	// 1024px 的应用图标, 由 AppKit 缩到菜单栏尺寸(Retina 下取 2 倍像素)。C 侧拷贝后释放。
-	C.czlTrayStart(C.CBytes(appIconPNG), C.int(len(appIconPNG)))
+	// C 侧拷贝后释放。
+	C.czlTrayStart(C.CBytes(trayTemplate1x), C.int(len(trayTemplate1x)),
+		C.CBytes(trayTemplate2x), C.int(len(trayTemplate2x)))
 	a.updateTrayLanguage()
 }
 

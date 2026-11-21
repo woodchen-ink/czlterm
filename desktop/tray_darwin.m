@@ -44,23 +44,36 @@ static void czlInstallReopenHandler(void) {
                     (IMP)czlShouldHandleReopen, "c@:@c");
 }
 
-void czlTrayStart(const void *png, int length) {
-    NSData *data = [[NSData alloc] initWithBytes:png length:(NSUInteger)length];
-    free((void *)png);
+void czlTrayStart(const void *png1x, int length1x, const void *png2x, int length2x) {
+    NSData *data1x = [[NSData alloc] initWithBytes:png1x length:(NSUInteger)length1x];
+    NSData *data2x = [[NSData alloc] initWithBytes:png2x length:(NSUInteger)length2x];
+    free((void *)png1x);
+    free((void *)png2x);
 
     dispatch_async(dispatch_get_main_queue(), ^{
         czlInstallReopenHandler();
         if (czlStatusItem != nil) {
-            [data release];
+            [data1x release];
+            [data2x release];
             return;
         }
 
         czlTarget = [[CZLTrayTarget alloc] init];
         czlStatusItem = [[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength] retain];
 
-        NSImage *image = [[NSImage alloc] initWithData:data];
-        [data release];
-        [image setSize:NSMakeSize(18, 18)];
+        // 1x / 2x 两份位图挂在同一个 18pt 的 NSImage 上, 系统按屏幕倍率取; template 让系统按菜单栏主题着色。
+        NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(18, 18)];
+        for (NSData *data in @[ data1x, data2x ]) {
+            NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithData:data];
+            if (rep != nil) {
+                [rep setSize:NSMakeSize(18, 18)];
+                [image addRepresentation:rep];
+                [rep release];
+            }
+        }
+        [data1x release];
+        [data2x release];
+        [image setTemplate:YES];
         NSStatusBarButton *button = [czlStatusItem button];
         [button setImage:image];
         [button setImagePosition:NSImageLeft];

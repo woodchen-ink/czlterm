@@ -14,7 +14,10 @@ import (
 // 系统托盘。关闭窗口只是隐藏(见 main.go 的 HideWindowOnClose), 后台要常驻
 // (MCP、保险库、同步); 托盘是用户找回窗口与真正退出的入口。
 
-//go:embed build/windows/icon.ico
+// 托盘用小尺寸符号 (16 / 20 / 24 / 32 多帧), 不用应用图标: 白色底板在托盘里认不出是哪个产品。
+// 由 docs/design/brand/build-ico.py 打包。
+//
+//go:embed build/windows/tray.ico
 var trayIcon []byte
 
 // trayLabels 串行化托盘创建与语言变更，避免启动期间丢失切换。

@@ -29,3 +29,6 @@ Thumbs.db
 # 本地开发备注
 CLAUDE.md
 AGENTS.md
+
+# 图标出图中间帧 (docs/design/brand/build-icons.js)
+/docs/design/brand/.frames/
