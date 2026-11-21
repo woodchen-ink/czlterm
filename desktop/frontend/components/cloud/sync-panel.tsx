@@ -22,6 +22,8 @@ import {
 import { toast } from "sonner";
 
 import { LoginCard } from "@/components/cloud/account-panel";
+import { UnlockCancelled, useVault } from "@/components/vault-provider";
+import { vaultNote } from "@/lib/vault-note";
 import { spaceLabel, useCloud } from "@/components/cloud/cloud-provider";
 import { ApproveDeviceDialog, RecoveryCodeDialog, UnlockDialog } from "@/components/cloud/key-dialogs";
 import { AddOnDialog, addOnUnit, planStorage, PlansDialog } from "@/components/cloud/plans-dialog";
@@ -55,6 +57,7 @@ const activePlan = (p: Plan) => !p.status || p.status === "active";
 export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
   useLanguage();
   const { account, user, cloud, spaces, billing, refreshCloud, refreshSpaces } = useCloud();
+  const { withVault } = useVault();
   const [recovery, setRecovery] = useState("");
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [busy, setBusy] = useState("");
@@ -87,7 +90,7 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
     try {
       await fn();
     } catch (e) {
-      toast.error(errorText(e));
+      if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
     } finally {
       setBusy("");
     }
@@ -339,12 +342,12 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
                 onClick={() =>
                   setConfirm({
                     title: t("把本机数据移到「我的云同步」?"),
-                    body: t("全部连接与脚本会移进个人同步空间并加密上传, 跳板关系保持不变; 本机空间随后为空。之后在任何登录同一账号的电脑上都能用。"),
+                    body: t("全部连接、脚本与保存的凭据会移进个人同步空间并加密上传, 跳板关系保持不变; 引用 Vaultwarden 的连接会转为保存的凭据, 别的电脑不需要 Vaultwarden 也能连。本机空间随后为空。"),
                     action: t("移过去"),
                     run: async () => {
-                      const r = await api.CloudMoveLocalToPersonal();
+                      const r = await withVault(() => api.CloudMoveLocalToPersonal());
                       await refreshSpaces();
-                      toast.success(t("已移动 {0} 条连接、{1} 个脚本", r.connections, r.scripts));
+                      toast.success(t("已移动 {0} 条连接、{1} 个脚本", r.connections, r.scripts), { description: vaultNote(r.vault) });
                     },
                   })
                 }

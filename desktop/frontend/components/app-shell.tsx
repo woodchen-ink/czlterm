@@ -48,6 +48,7 @@ import {
   type UpdateInfo,
 } from "@/lib/api";
 import { errorText } from "@/lib/errors";
+import { vaultNote } from "@/lib/vault-note";
 import { cn } from "@/lib/utils";
 
 export function AppShell() {
@@ -241,18 +242,28 @@ function Shell() {
       remove: (c) => setRemoving(c),
       copyTo: async (c, key, label) => {
         try {
-          await api.CopyConnectionTo(c.id, key);
-          toast.success(t("已复制到「{0}」", label));
+          const r = await guarded(() => api.CopyConnectionTo(c.id, key));
+          toast.success(t("已复制到「{0}」", label), { description: vaultNote(r.vault) });
         } catch (e) {
-          toast.error(errorText(e));
+          if (!(e instanceof UnlockCancelled) && !(e instanceof ConfirmCancelled)) toast.error(errorText(e));
         }
       },
       copyGroupTo: async (group, key, label) => {
         try {
-          const n = await api.CopyGroupTo(group, key);
-          toast.success(t("已把文件夹「{0}」的 {1} 条连接复制到「{2}」", group, n, label));
+          const r = await guarded(() => api.CopyGroupTo(group, key));
+          toast.success(t("已把文件夹「{0}」的 {1} 条连接复制到「{2}」", group, r.connections, label), { description: vaultNote(r.vault) });
         } catch (e) {
-          toast.error(errorText(e));
+          if (!(e instanceof UnlockCancelled) && !(e instanceof ConfirmCancelled)) toast.error(errorText(e));
+        }
+      },
+      convertVault: async (ids) => {
+        try {
+          const r = await guarded(() => api.ConvertToStoredCredentials(ids));
+          await reload();
+          if (r.converted === 0 && r.skipped === 0) toast.info(t("没有用 Vaultwarden 的连接"));
+          else toast.success(t("已转为保存的凭据"), { description: vaultNote(r) });
+        } catch (e) {
+          if (!(e instanceof UnlockCancelled) && !(e instanceof ConfirmCancelled)) toast.error(errorText(e));
         }
       },
       runScript,
@@ -264,6 +275,8 @@ function Shell() {
   function create(protocol: Protocol) {
     const c = emptyConnection(protocol);
     if (selected?.group) c.group = selected.group;
+    // 同步空间里默认用保存的凭据: 随空间同步, 别的电脑与团队成员都能用
+    if (current.kind !== "local") c.auth = "stored";
     setFormInitial(c);
     setFormKey((k) => k + 1);
     setFormOpen(true);

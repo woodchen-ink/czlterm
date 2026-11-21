@@ -33,6 +33,8 @@ export interface ConnectionActions {
   copyTo: (c: ConnectionView, space: string, label: string) => void;
   /** 把整个文件夹复制到另一个空间 (文件夹名与组内跳板关系保留, 凭据与组外跳板机一并带过去)。 */
   copyGroupTo: (group: string, space: string, label: string) => void;
+  /** 把这些连接 (连同跳板链) 的 Vaultwarden 凭据转为保存的凭据。 */
+  convertVault: (ids: string[]) => void;
   runScript: (c: ConnectionView, s: Script) => void;
   manageScripts: () => void;
 }
@@ -110,6 +112,9 @@ export function ConnectionList({
                   <ContextMenuItem onSelect={() => setCollapsed((s) => ({ ...s, [group]: !s[group] }))}>
                     {isCollapsed ? t("展开") : t("折叠")}
                   </ContextMenuItem>
+                  {!readOnly && list.some((c) => c.auth === "vault") && (
+                    <ContextMenuItem onSelect={() => actions.convertVault(list.map((c) => c.id))}>{t("Vaultwarden 凭据转为保存的凭据")}</ContextMenuItem>
+                  )}
                   {targets.length > 0 && (
                     <ContextMenuSub>
                       <ContextMenuSubTrigger>{t("整个文件夹复制到…")}</ContextMenuSubTrigger>
@@ -213,6 +218,9 @@ function ConnectionRow({
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => actions.edit(c)} disabled={readOnly}>{t("编辑")}</ContextMenuItem>
         <ContextMenuItem onSelect={() => actions.duplicate(c)} disabled={readOnly}>{t("复制")}</ContextMenuItem>
+        {c.auth === "vault" && !readOnly && (
+          <ContextMenuItem onSelect={() => actions.convertVault([c.id])}>{t("转为保存的凭据")}</ContextMenuItem>
+        )}
         {targets.length > 0 && (
           <ContextMenuSub>
             <ContextMenuSubTrigger>{t("复制到…")}</ContextMenuSubTrigger>

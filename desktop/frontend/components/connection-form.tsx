@@ -6,6 +6,7 @@ import { useLanguage } from "@/components/language-provider";
 import { useCallback, useEffect, useState } from "react";
 import { KeyRoundIcon, Loader2Icon, PencilIcon, PlusIcon } from "lucide-react";
 
+import { useCloud } from "@/components/cloud/cloud-provider";
 import { CredentialDialog } from "@/components/credential-dialog";
 import { VaultItemPicker } from "@/components/vault-item-picker";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export function ConnectionForm({
   onSaved: (c: Connection) => void;
 }) {
   useLanguage();
+  const { current } = useCloud();
   // 父组件每次打开时换 key 重新挂载, 初始值只在挂载时读取。
   const [form, setForm] = useState<Connection | null>(() => (initial ? { ...initial } : null));
   const [names, setNames] = useState(() => {
@@ -139,12 +141,19 @@ export function ConnectionForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="stored">{t("保存的凭据 (加密保存, 随空间同步)")}</SelectItem>
                 <SelectItem value="system">{proto === "ssh" ? t("系统默认 (~/.ssh、系统 agent)") : t("不提供, 手动输入")}</SelectItem>
-                <SelectItem value="vault">{t("Vaultwarden 条目")}</SelectItem>
-                <SelectItem value="stored">{t("保存的凭据 (无需 Vaultwarden)")}</SelectItem>
+                <SelectItem value="vault">{t("Vaultwarden / Bitwarden 条目")}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
+          {current.kind !== "local" && form.auth !== "stored" && (
+            <p className="text-muted-foreground -mt-2 text-xs">
+              {form.auth === "vault"
+                ? t("Vaultwarden 只在本机可用: 别的电脑要装好并登录同一个保险库, 团队成员则连不上。建议用保存的凭据。")
+                : t("系统默认用的是每台电脑自己的密钥, 不会随空间同步。")}
+            </p>
+          )}
 
           {form.auth === "stored" && (
             <div className="bg-secondary/50 space-y-2 rounded-md p-3">

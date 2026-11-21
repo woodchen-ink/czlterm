@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,12 +16,15 @@ import (
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/woodchen-ink/czlterm/desktop/internal/agent"
 	"github.com/woodchen-ink/czlterm/desktop/internal/billing"
 	"github.com/woodchen-ink/czlterm/desktop/internal/cloudsync"
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
+	"github.com/woodchen-ink/czlterm/desktop/internal/cred"
 	"github.com/woodchen-ink/czlterm/desktop/internal/errcode"
 	"github.com/woodchen-ink/czlterm/desktop/internal/settings"
 	"github.com/woodchen-ink/czlterm/desktop/internal/space"
+	"github.com/woodchen-ink/czlterm/desktop/internal/vault"
 )
 
 // eventSpaceChanged 当前空间换了 (用户切换、离开团队后退回本机), 载荷空间标识。
@@ -247,7 +251,9 @@ func (a *App) personalSpace() (*space.Space, error) {
 	return nil, errcode.ErrSpaceUnknown
 }
 
-// CloudMoveLocalToPersonal 把本机空间的全部连接与脚本搬进个人同步空间 (id 不变), 并切到个人空间。
+// CloudMoveLocalToPersonal 把本机空间的全部数据搬进个人同步空间, 再把引用 Vaultwarden 的连接
+// 转为保存的凭据 (随空间端到端加密同步, 别的电脑不需要 Vaultwarden)。有这类连接而保险库未解锁时
+// 先返回 3001, 什么都不搬, 界面解锁后重试。
 func (a *App) CloudMoveLocalToPersonal() (space.MoveResult, error) {
 	if err := a.ready(); err != nil {
 		return space.MoveResult{}, err
@@ -256,9 +262,16 @@ func (a *App) CloudMoveLocalToPersonal() (space.MoveResult, error) {
 	if err != nil {
 		return space.MoveResult{}, err
 	}
-	res, err := space.MoveAll(a.spaces.Local(), to)
+	from := a.spaces.Local()
+	if err := a.vaultReadyFor(from, nil); err != nil {
+		return space.MoveResult{}, err
+	}
+	res, err := space.MoveAll(from, to)
 	if err != nil {
 		return res, err
+	}
+	if res.Vault, err = space.ConvertVault(to, nil, a.vaultCredential); err != nil {
+		a.log.Warn("convert vault credentials after move", "err", err)
 	}
 	if _, err := a.SwitchSpace(to.Key); err != nil {
 		a.log.Warn("switch space after move", "err", err)
@@ -266,34 +279,148 @@ func (a *App) CloudMoveLocalToPersonal() (space.MoveResult, error) {
 	return res, nil
 }
 
-// CopyConnectionTo 把连接复制到另一个空间 (换新 id, 跳板链一并复制), 返回新连接。
-func (a *App) CopyConnectionTo(id, target string) (conn.Connection, error) {
+// CopyReport 是复制到另一个空间的结果。
+type CopyReport struct {
+	// Connections 复制的连接数 (不含一并带过去的跳板机)
+	Connections int                 `json:"connections"`
+	Vault       space.ConvertResult `json:"vault"`
+}
+
+// CopyConnectionTo 把连接复制到另一个空间 (换新 id, 跳板链一并复制)。目标是同步空间时,
+// 复制过去的连接里引用 Vaultwarden 的一律转为保存的凭据, 来源不动。
+func (a *App) CopyConnectionTo(id, target string) (CopyReport, error) {
 	if err := a.ready(); err != nil {
-		return conn.Connection{}, err
+		return CopyReport{}, err
 	}
 	_, from, err := a.findConn(id)
 	if err != nil {
-		return conn.Connection{}, err
+		return CopyReport{}, err
 	}
-	to := a.spaces.Get(target)
-	if to == nil || !a.spaces.Visible(target) {
-		return conn.Connection{}, errcode.ErrSpaceUnknown
+	to, err := a.copyTarget(from, target, []string{id})
+	if err != nil {
+		return CopyReport{}, err
 	}
-	return space.CopyConnection(from, to, id)
+	_, written, err := space.CopyConnection(from, to, id)
+	if err != nil {
+		return CopyReport{}, err
+	}
+	return CopyReport{Connections: 1, Vault: a.convertCopied(to, written)}, nil
 }
 
 // CopyGroupTo 把当前空间里一个文件夹 (分组) 的全部连接复制到另一个空间, 文件夹名与彼此的跳板关系保持,
-// 引用的凭据与组外跳板机一并带过去。group 为空表示未分组的连接。返回复制的条数。
-func (a *App) CopyGroupTo(group, target string) (int, error) {
+// 引用的凭据与组外跳板机一并带过去; Vaultwarden 引用的处理同 CopyConnectionTo。group 为空表示未分组的连接。
+func (a *App) CopyGroupTo(group, target string) (CopyReport, error) {
 	if err := a.ready(); err != nil {
-		return 0, err
+		return CopyReport{}, err
 	}
+	from := a.currentSpace()
+	list, _ := from.Conns.List()
+	var ids []string
+	for _, c := range list {
+		if c.Group == group {
+			ids = append(ids, c.ID)
+		}
+	}
+	to, err := a.copyTarget(from, target, ids)
+	if err != nil {
+		return CopyReport{}, err
+	}
+	out, written, err := space.CopyGroup(from, to, group)
+	if err != nil {
+		return CopyReport{}, err
+	}
+	return CopyReport{Connections: len(out), Vault: a.convertCopied(to, written)}, nil
+}
+
+// ConvertToStoredCredentials 把当前空间里 ids (连同跳板链; 为空表示整个空间) 引用 Vaultwarden 的连接
+// 转为保存的凭据。保险库未解锁返回 3001。
+func (a *App) ConvertToStoredCredentials(ids []string) (space.ConvertResult, error) {
+	if err := a.ready(); err != nil {
+		return space.ConvertResult{}, err
+	}
+	sp := a.currentSpace()
+	if err := a.vaultReadyFor(sp, ids); err != nil {
+		return space.ConvertResult{}, err
+	}
+	return space.ConvertVault(sp, ids, a.vaultCredential)
+}
+
+// copyTarget 解析复制目标; 目标是同步空间且要复制的连接引用了 Vaultwarden 时, 先要求保险库已解锁。
+func (a *App) copyTarget(from *space.Space, target string, ids []string) (*space.Space, error) {
 	to := a.spaces.Get(target)
 	if to == nil || !a.spaces.Visible(target) {
-		return 0, errcode.ErrSpaceUnknown
+		return nil, errcode.ErrSpaceUnknown
 	}
-	out, err := space.CopyGroup(a.currentSpace(), to, group)
-	return len(out), err
+	if to.Key != space.Local {
+		if err := a.vaultReadyFor(from, ids); err != nil {
+			return nil, err
+		}
+	}
+	return to, nil
+}
+
+// convertCopied 目标是同步空间时把刚复制过去的连接转为保存的凭据; 失败只记日志 (连接已复制, 保留原引用)。
+func (a *App) convertCopied(to *space.Space, written []string) space.ConvertResult {
+	if to.Key == space.Local || len(written) == 0 {
+		return space.ConvertResult{}
+	}
+	res, err := space.ConvertVault(to, written, a.vaultCredential)
+	if err != nil {
+		a.log.Warn("convert vault credentials after copy", "err", err)
+	}
+	return res
+}
+
+// vaultReadyFor 在 ids (为空表示整个空间) 里有引用 Vaultwarden 的连接而保险库未解锁时返回 3001。
+func (a *App) vaultReadyFor(sp *space.Space, ids []string) error {
+	if space.NeedsVault(sp, ids) && a.vault.Session() == "" {
+		return vault.ErrLocked
+	}
+	return nil
+}
+
+// vaultCredential 把连接引用的 Vaultwarden 条目读成一条保存的凭据: 密码条目给用户名与密码,
+// 私钥条目给私钥与口令 (与连接时的取法一致)。名称取条目名。
+func (a *App) vaultCredential(vaultItem, keyItem string) (cred.Credential, error) {
+	var c cred.Credential
+	var names []string
+	if vaultItem != "" {
+		s, err := a.vault.Secret(vaultItem)
+		if err != nil {
+			return c, err
+		}
+		if s.Password == "" {
+			return c, errors.New("4107 vault item has no password")
+		}
+		c.Username, c.Password = s.Username, s.Password
+		if sum, ok := a.vault.Summary(vaultItem); ok {
+			names = append(names, sum.Name)
+		}
+	}
+	if keyItem != "" {
+		s, err := a.vault.Secret(keyItem)
+		if err != nil {
+			return c, err
+		}
+		if s.PrivateKey == "" {
+			return c, errors.New("4104 vault item has no private key")
+		}
+		if _, err := agent.ParseKey(s.PrivateKey, s.Passphrase); err != nil {
+			return c, err
+		}
+		c.PrivateKey, c.Passphrase = s.PrivateKey, s.Passphrase
+		if c.Username == "" {
+			c.Username = s.Username
+		}
+		if sum, ok := a.vault.Summary(keyItem); ok && (len(names) == 0 || names[0] != sum.Name) {
+			names = append(names, sum.Name)
+		}
+	}
+	c.Name = strings.Join(names, " / ")
+	if c.Name == "" {
+		c.Name = "Vaultwarden"
+	}
+	return c, nil
 }
 
 // CopyScriptTo 把脚本复制到另一个空间。

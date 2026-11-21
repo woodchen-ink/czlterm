@@ -246,7 +246,7 @@ func TestCopyGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := CopyGroup(src, dst, "prod")
+	out, _, err := CopyGroup(src, dst, "prod")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,69 @@ func TestCopyGroup(t *testing.T) {
 	if len(creds) != 1 || creds[0].ID == sum.ID {
 		t.Fatalf("target credentials = %+v", creds)
 	}
-	if _, err := CopyGroup(src, dst, "missing"); err != errcode.ErrGroupEmpty {
+	if _, _, err := CopyGroup(src, dst, "missing"); err != errcode.ErrGroupEmpty {
 		t.Fatalf("empty group err = %v", err)
+	}
+}
+
+// Vaultwarden 引用转为保存的凭据: 共用同一条目的只建一条凭据, 跳板链一并转换, 读不到的保留原引用。
+func TestConvertVault(t *testing.T) {
+	r := newRegistry(t, me)
+	sp := r.Get(me)
+	jump, err := sp.SaveConnection(conn.Connection{Name: "jump", Protocol: "ssh", Host: "j", Auth: conn.AuthVault, KeyItem: "key1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var web []conn.Connection
+	for _, h := range []string{"w1", "w2"} {
+		c, err := sp.SaveConnection(conn.Connection{Name: h, Protocol: "ssh", Host: h, Jump: jump.ID, Auth: conn.AuthVault, VaultItem: "pw1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		web = append(web, c)
+	}
+	gone, err := sp.SaveConnection(conn.Connection{Name: "gone", Protocol: "ssh", Host: "g", Auth: conn.AuthVault, VaultItem: "missing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := sp.SaveConnection(conn.Connection{Name: "plain", Protocol: "ssh", Host: "p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !NeedsVault(sp, []string{web[0].ID}) || NeedsVault(sp, []string{plain.ID}) {
+		t.Fatal("NeedsVault wrong")
+	}
+	read := func(vi, ki string) (cred.Credential, error) {
+		switch {
+		case vi == "pw1":
+			return cred.Credential{Name: "web", Username: "root", Password: "pw"}, nil
+		case ki == "key1":
+			return cred.Credential{Name: "jump key", Username: "ops", PrivateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nx\n-----END OPENSSH PRIVATE KEY-----\n"}, nil
+		}
+		return cred.Credential{}, errcode.ErrSpaceUnknown
+	}
+	res, err := ConvertVault(sp, []string{web[0].ID, web[1].ID, gone.ID}, read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Converted != 3 || res.Credentials != 2 || res.Skipped != 1 {
+		t.Fatalf("result = %+v", res)
+	}
+	w1, _ := sp.Conns.Get(web[0].ID)
+	w2, _ := sp.Conns.Get(web[1].ID)
+	j, _ := sp.Conns.Get(jump.ID)
+	g, _ := sp.Conns.Get(gone.ID)
+	if w1.Auth != conn.AuthStored || w1.VaultItem != "" || w1.Credential == "" || w1.Credential != w2.Credential {
+		t.Fatalf("w1 = %+v, w2 = %+v", w1, w2)
+	}
+	if j.Auth != conn.AuthStored || j.KeyItem != "" || j.Credential == w1.Credential {
+		t.Fatalf("jump = %+v", j)
+	}
+	if g.Auth != conn.AuthVault || g.VaultItem != "missing" {
+		t.Fatalf("unreadable connection changed: %+v", g)
+	}
+	cr, err := sp.Creds.Get(w1.Credential)
+	if err != nil || cr.Password != "pw" || cr.Username != "root" {
+		t.Fatalf("credential = %+v, %v", cr, err)
 	}
 }

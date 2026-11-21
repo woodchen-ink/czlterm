@@ -18,6 +18,8 @@ type MoveResult struct {
 	Credentials int `json:"credentials"`
 	Renamed     int `json:"renamed"`
 	Merged      int `json:"merged"`
+	// Vault 是搬完后把 Vaultwarden 引用转为保存的凭据的结果 (由调用方填写)
+	Vault ConvertResult `json:"vault"`
 }
 
 // MoveAll 把 from 的全部连接、脚本与凭据搬到 to, 尽量保留 id (跳板关系、机器信息缓存跟着走)。
@@ -142,17 +144,18 @@ func sameContent(a, b any) bool {
 
 // CopyConnection 把一条连接复制到 to, 换新 id; 它的跳板链与引用的凭据一并复制 (各自换新 id 并改写引用),
 // 目标空间里不会出现指向来源空间的引用。返回新连接。
-func CopyConnection(from, to *Space, id string) (conn.Connection, error) {
-	out, err := CopyConnections(from, to, []string{id})
+// written 是写进 to 的全部连接 id (含一并带过去的跳板机)。
+func CopyConnection(from, to *Space, id string) (c conn.Connection, written []string, err error) {
+	out, written, err := CopyConnections(from, to, []string{id})
 	if err != nil {
-		return conn.Connection{}, err
+		return conn.Connection{}, nil, err
 	}
-	return out[0], nil
+	return out[0], written, nil
 }
 
 // CopyGroup 把 from 里分组 (文件夹) 为 group 的全部连接复制到 to, 文件夹名与彼此的跳板关系保持不变。
-// group 为空表示未分组的连接。返回复制的连接 (不含为跳板一并带过去的组外连接)。
-func CopyGroup(from, to *Space, group string) ([]conn.Connection, error) {
+// group 为空表示未分组的连接。返回复制的连接 (不含为跳板一并带过去的组外连接) 与写进 to 的全部连接 id。
+func CopyGroup(from, to *Space, group string) ([]conn.Connection, []string, error) {
 	list, _ := from.Conns.List()
 	var ids []string
 	for _, c := range list {
@@ -161,19 +164,19 @@ func CopyGroup(from, to *Space, group string) ([]conn.Connection, error) {
 		}
 	}
 	if len(ids) == 0 {
-		return nil, errcode.ErrGroupEmpty
+		return nil, nil, errcode.ErrGroupEmpty
 	}
 	return CopyConnections(from, to, ids)
 }
 
 // CopyConnections 把一批连接复制到 to, 各换新 id。同一批里共用的跳板机与凭据只复制一份,
-// 批内互为跳板的关系改写到新 id; 批外的跳板机一并复制过去。返回与 ids 同序的新连接。
-func CopyConnections(from, to *Space, ids []string) ([]conn.Connection, error) {
+// 批内互为跳板的关系改写到新 id; 批外的跳板机一并复制过去。返回与 ids 同序的新连接, 以及写进 to 的全部连接 id。
+func CopyConnections(from, to *Space, ids []string) ([]conn.Connection, []string, error) {
 	if from == to {
-		return nil, errcode.ErrSpaceSame
+		return nil, nil, errcode.ErrSpaceSame
 	}
 	if err := to.writable(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	to.mu.Lock()
 	defer to.mu.Unlock()
@@ -229,7 +232,7 @@ func CopyConnections(from, to *Space, ids []string) ([]conn.Connection, error) {
 	for _, id := range ids {
 		nid, err := copyOne(id, 0)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		newIDs = append(newIDs, nid)
 	}
@@ -242,11 +245,11 @@ func CopyConnections(from, to *Space, ids []string) ([]conn.Connection, error) {
 	for _, id := range newIDs {
 		c, err := to.Conns.Get(id)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out = append(out, c)
 	}
-	return out, nil
+	return out, written, nil
 }
 
 // CopyScript 把一条脚本复制到 to, 换新 id。
