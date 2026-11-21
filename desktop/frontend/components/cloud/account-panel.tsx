@@ -59,7 +59,7 @@ export function AccountPanel({ onOpenSync, onOpenTeams }: { onOpenSync: () => vo
   const syncLine = !cloud?.available
     ? { tone: "warn" as const, text: t("同步服务暂不可用") }
     : keyStatus === "not_enrolled"
-      ? { tone: "idle" as const, text: t("还没开通") }
+      ? { tone: "idle" as const, text: t("未开启端到端加密") }
       : keyStatus === "locked"
         ? { tone: "warn" as const, text: t("这台电脑待解锁") }
         : personal?.active

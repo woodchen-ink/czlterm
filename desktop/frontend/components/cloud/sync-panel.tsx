@@ -209,12 +209,12 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
               <ShieldCheckIcon className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{t("开通端到端加密云同步")}</p>
-              <p className="text-muted-foreground text-xs">{t("密钥只在你的设备上, 服务器看不到连接地址、凭据和脚本。开通时生成恢复码, 换电脑用它解锁。")}</p>
+              <p className="font-medium">{t("开启端到端加密")}</p>
+              <p className="text-muted-foreground text-xs">{t("个人空间和团队空间都要先开启才能同步, 一个账号只需开启一次, 与是否订阅无关。密钥只在你的设备上, 服务器看不到连接地址、凭据和脚本。")}</p>
             </div>
           </div>
           <Button size="sm" onClick={() => run("enroll", async () => setRecovery(await api.CloudEnroll()))} disabled={busy === "enroll"}>
-            {busy === "enroll" && <Loader2Icon className="animate-spin" />} {t("开通并生成恢复码")}
+            {busy === "enroll" && <Loader2Icon className="animate-spin" />} {t("开启并生成恢复码")}
           </Button>
         </div>
       ) : keyStatus === "locked" ? (

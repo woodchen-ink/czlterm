@@ -77,6 +77,9 @@ export function RecoveryCodeDialog({ code, onDone }: { code: string; onDone: () 
             <DownloadIcon /> {t("另存为文件")}
           </Button>
         </div>
+        <p className="text-muted-foreground text-xs">
+          {t("建议存进密码管理器, 比如在 Vaultwarden / Bitwarden 里新建一条安全笔记。")}
+        </p>
         <p className="text-destructive text-xs">
           {t("恢复码只显示这一次。丢了它、又没有其它已登录的设备时, 云端数据无法恢复, 客服也无法代为找回。")}
         </p>

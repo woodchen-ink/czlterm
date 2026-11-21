@@ -4,7 +4,7 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/components/language-provider";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpCircleIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { ArrowUpCircleIcon, PlusIcon, SearchIcon, ShieldAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { CloudProvider, useCloud } from "@/components/cloud/cloud-provider";
@@ -65,7 +65,7 @@ export function AppShell() {
 function Shell() {
   useLanguage();
   const { withVault, status: vaultStatus } = useVault();
-  const { current } = useCloud();
+  const { current, cloud } = useCloud();
   // 连接前可能要先解锁保险库, 团队连接可能要先确认 (6416); 两层都包上
   const confirmGate = useConfirmGate();
   const guarded = useCallback(<T,>(fn: () => Promise<T>) => confirmGate(() => withVault(fn)), [confirmGate, withVault]);
@@ -270,6 +270,8 @@ function Shell() {
   }
 
   const readOnly = !!list?.readOnly || current.readOnly;
+  // 同步空间里还没开启端到端加密 / 本机待解锁: 修改只留在本机, 要明确告诉用户
+  const keyBlocked = current.kind !== "local" && !!cloud?.available && (cloud.keyStatus === "not_enrolled" || cloud.keyStatus === "locked");
 
   function openSettings(tab: SettingsTab) {
     setSettingsTab(tab);
@@ -319,6 +321,19 @@ function Shell() {
             <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-3.5 -translate-y-1/2" />
             <Input className="h-7 pl-7 text-sm" placeholder={t("搜索")} value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
+          {keyBlocked && (
+            <div className="border-warning/40 bg-warning/10 mx-2 mb-1.5 flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs">
+              <ShieldAlertIcon className="text-warning mt-px size-3.5 shrink-0" />
+              <span className="min-w-0 flex-1">
+                {cloud?.keyStatus === "locked"
+                  ? t("这台电脑还没解锁端到端加密, 这里的修改暂时只存在本机。")
+                  : t("还没开启端到端加密, 这里的修改只存在本机, 不会同步。")}
+              </span>
+              <button type="button" className="text-brand-strong shrink-0 font-medium hover:underline" onClick={() => openSettings("sync")}>
+                {cloud?.keyStatus === "locked" ? t("去解锁") : t("去开启")}
+              </button>
+            </div>
+          )}
           <div className="czl-scroll min-h-0 flex-1 overflow-y-auto">
             {loadError ? (
               <p className="text-destructive px-4 py-6 text-sm">{errorText(loadError)}</p>

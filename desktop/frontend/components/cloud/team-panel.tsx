@@ -34,7 +34,9 @@ const ROLES = ["admin", "member", "viewer"] as const;
 /** 设置 → 团队: 建团队、凭码加入、成员与角色、邀请、退出与解散。订阅在「云同步」页。 */
 export function TeamPanel({ onOpenAccount, onOpenSync }: { onOpenAccount: () => void; onOpenSync: () => void }) {
   useLanguage();
-  const { user, billing, refreshCloud, openOrgSpace } = useCloud();
+  const { user, cloud, billing, refreshCloud, openOrgSpace } = useCloud();
+  const keyStatus = cloud?.keyStatus;
+  const keyBlocked = !!cloud?.available && (keyStatus === "not_enrolled" || keyStatus === "locked");
   const [orgs, setOrgs] = useState<Org[] | null>(null);
   const [orgId, setOrgId] = useState("");
   const [detail, setDetail] = useState<OrgDetail | null>(null);
@@ -88,6 +90,9 @@ export function TeamPanel({ onOpenAccount, onOpenSync }: { onOpenAccount: () => 
     setDialog("");
     await loadOrgs(id);
     await refreshCloud();
+    if (keyBlocked) {
+      toast.info(t("开启端到端加密后, 团队空间才会同步。"), { action: { label: t("去开启"), onClick: onOpenSync }, duration: 10000 });
+    }
   };
 
   return (
@@ -116,6 +121,18 @@ export function TeamPanel({ onOpenAccount, onOpenSync }: { onOpenAccount: () => 
         </Button>
       </div>
 
+      {keyBlocked && orgs.length > 0 && (
+        <Notice tone="warning" icon={AlertTriangleIcon}>
+          <span className="flex-1">
+            {keyStatus === "locked"
+              ? t("这台电脑还没解锁端到端加密, 团队空间暂不同步。")
+              : t("还没开启端到端加密: 团队空间的内容只存在本机, 同事看不到。")}
+          </span>
+          <Button size="sm" onClick={onOpenSync}>
+            {keyStatus === "locked" ? t("去解锁") : t("去开启")}
+          </Button>
+        </Notice>
+      )}
       {error && <p className="text-destructive text-sm">{error}</p>}
       {orgs.length === 0 && !error && (
         <div className="text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
@@ -133,7 +150,7 @@ export function TeamPanel({ onOpenAccount, onOpenSync }: { onOpenAccount: () => 
           onChanged={loadDetail}
           onOpenSpace={() =>
             void openOrgSpace(detail.id).then((ok) =>
-              ok ? toast.success(t("已切换到「{0}」", detail.name)) : toast.info(t("团队空间还在准备, 开通云同步并解锁后即可打开")),
+              ok ? toast.success(t("已切换到「{0}」", detail.name)) : toast.info(t("团队空间还在准备, 开启端到端加密后即可打开")),
             )
           }
           onLeft={async () => {

@@ -72,7 +72,7 @@ export function StatusBar({
     : !cloud?.available
       ? t("同步服务暂不可用")
       : cloud.keyStatus === "not_enrolled"
-        ? t("未开通云同步")
+        ? t("未开启端到端加密")
         : cloud.keyStatus === "locked"
           ? t("本机待解锁")
           : cloud.spaces.some((s) => s.status === "error")
