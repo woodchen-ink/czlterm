@@ -2,8 +2,10 @@
 
     python docs/design/brand/build-ico.py [预览图输出路径]
 
-  desktop/build/windows/icon.ico  应用图标: 16 / 24 / 32 小尺寸符号, 48 / 64 / 256 透明底完整标志
-  desktop/build/windows/tray.ico  托盘: 16 / 20 / 24 / 32 小尺寸符号 (覆盖 100%-200% 缩放)
+  desktop/build/windows/icon.ico  应用图标: 16 / 20 小尺寸符号, 24 / 32 / 48 / 64 / 256 透明底完整标志
+  desktop/build/windows/tray.ico  托盘: 16 / 20 小尺寸符号, 24 / 32 完整标志 (覆盖 100%-200% 缩放)
+
+小尺寸符号只用于 16 / 20 档; 系统按缩放挑帧, 高缩放屏幕上自然显示带云朵的版本。
 
 不让 Wails 从 appicon.png 缩放生成 ico: 缩放出来的 16 / 32 是整块标志, 括弧挤掉符号, 托盘里认不出。
 """
@@ -40,7 +42,7 @@ def pack_ico(frames: list[Path], out: Path) -> None:
 
 
 def preview(out: Path) -> None:
-    """48px 完整标志放在深色壁纸 / 中灰 / 浅色底; 16 / 24 / 32 符号原尺寸与 4 倍放大放在亮 / 暗任务栏底。"""
+    """48px 完整标志放在深色壁纸 / 中灰 / 浅色底; 托盘各帧 (16 / 20 符号, 24 / 32 完整标志) 原尺寸与 4 倍放大放在亮 / 暗任务栏底。"""
     W = 760
     canvas = Image.new("RGB", (W, 520), (200, 200, 200))
     for i, bg in enumerate([(24, 30, 48), (128, 128, 128), (243, 243, 243)]):
@@ -53,14 +55,16 @@ def preview(out: Path) -> None:
     for bg in [(243, 243, 243), (32, 32, 32)]:
         band = Image.new("RGB", (W, 200), bg)
         x = 16
-        sets = ["glyph"] + (["glyph-white"] if bg[0] < 128 else [])
-        for prefix in sets:
-            for s in (16, 24, 32):
-                g = Image.open(FRAMES / f"{prefix}-{s}.png")
-                band.paste(g, (x, 16), g)
-                big = g.resize((s * 4, s * 4), Image.NEAREST)
-                band.paste(big, (x, 56), big)
-                x += s * 4 + 24
+        frames = ["glyph-16", "glyph-20", "mark-24", "mark-32"]
+        if bg[0] < 128:
+            frames += ["glyph-white-16", "glyph-white-20"]
+        for name in frames:
+            s = int(name.rsplit("-", 1)[1])
+            g = Image.open(FRAMES / f"{name}.png")
+            band.paste(g, (x, 16), g)
+            big = g.resize((s * 4, s * 4), Image.NEAREST)
+            band.paste(big, (x, 56), big)
+            x += s * 4 + 24
         canvas.paste(band, (0, y))
         y += 200
     canvas.save(out)
@@ -68,10 +72,13 @@ def preview(out: Path) -> None:
 
 def main() -> None:
     pack_ico(
-        [FRAMES / f"glyph-{s}.png" for s in (16, 24, 32)] + [FRAMES / f"mark-{s}.png" for s in (48, 64, 256)],
+        [FRAMES / f"glyph-{s}.png" for s in (16, 20)] + [FRAMES / f"mark-{s}.png" for s in (24, 32, 48, 64, 256)],
         WIN / "icon.ico",
     )
-    pack_ico([FRAMES / f"glyph-{s}.png" for s in (16, 20, 24, 32)], WIN / "tray.ico")
+    pack_ico(
+        [FRAMES / f"glyph-{s}.png" for s in (16, 20)] + [FRAMES / f"mark-{s}.png" for s in (24, 32)],
+        WIN / "tray.ico",
+    )
     if len(sys.argv) > 1:
         preview(Path(sys.argv[1]))
     print("ico done")

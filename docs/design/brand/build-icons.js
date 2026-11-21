@@ -56,15 +56,15 @@ png(fit(mark, 1024, MARK_RATIO), path.join(DESKTOP, "build", "appicon.png"));
 png(fit(glyph, 18, GLYPH_RATIO, "#000000"), path.join(DESKTOP, "build", "tray", "template.png"));
 png(fit(glyph, 36, GLYPH_RATIO, "#000000"), path.join(DESKTOP, "build", "tray", "template@2x.png"));
 
-// 前端: 「关于」页 48px 图标用完整标志, WebView favicon 用小尺寸符号。
+// 前端: 「关于」页 48px 图标与 WebView favicon (单张 256, ≥24px 显示) 都用完整标志。
 png(fit(mark, 256, MARK_RATIO), path.join(DESKTOP, "frontend", "public", "logo.png"));
-png(fit(glyph, 256, GLYPH_RATIO), path.join(DESKTOP, "frontend", "app", "icon.png"));
+png(fit(mark, 256, MARK_RATIO), path.join(DESKTOP, "frontend", "app", "icon.png"));
 
-// ico 帧: 16 / 20 / 24 / 32 小尺寸符号, 48 / 64 / 256 透明底完整标志。
-for (const s of [16, 20, 24, 32]) png(fit(glyph, s, GLYPH_RATIO), path.join(FRAMES, `glyph-${s}.png`));
-for (const s of [48, 64, 256]) png(fit(mark, s, MARK_RATIO), path.join(FRAMES, `mark-${s}.png`));
+// ico 帧: 小尺寸符号只用于 16 / 20 档, 24px 及以上一律用透明底完整标志。
+for (const s of [16, 20]) png(fit(glyph, s, GLYPH_RATIO), path.join(FRAMES, `glyph-${s}.png`));
+for (const s of [24, 32, 48, 64, 256]) png(fit(mark, s, MARK_RATIO), path.join(FRAMES, `mark-${s}.png`));
 
 // 验收预览: 菜单栏 template 着色后的白色版
-for (const s of [16, 24, 32]) png(fit(glyph, s, GLYPH_RATIO, "#FFFFFF"), path.join(FRAMES, `glyph-white-${s}.png`));
+for (const s of [16, 20]) png(fit(glyph, s, GLYPH_RATIO, "#FFFFFF"), path.join(FRAMES, `glyph-white-${s}.png`));
 
 console.log("done");
