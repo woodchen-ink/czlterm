@@ -5,10 +5,10 @@ English | [简体中文](README.zh-CN.md)
 A lightweight connection manager. SSH runs your system OpenSSH in a built-in tabbed terminal, VNC opens in a built-in viewer, RDP opens in the client you already have; czlterm manages the connections, pulls credentials from Vaultwarden, browses remote files, and exposes your servers to AI clients over MCP.
 
 - **Built-in terminal and VNC viewer**: SSH opens in terminal tabs inside the app, several at once; you can switch to your system terminal in settings (Terminal, iTerm2, Ghostty, WezTerm, kitty, Windows Terminal, PowerShell). VNC opens in a tab (noVNC): it signs in to a Mac with username and password, scales the screen to the window and can pop out into its own window; you can switch to Screen Sharing (macOS) or TigerVNC (Windows) in settings. RDP uses Windows App on macOS and mstsc on Windows
-- **Credentials from Vaultwarden**: passwords and SSH private keys are read through the official `bw` CLI and never written to disk
+- **Credentials from Vaultwarden, or saved in czlterm**: passwords and SSH private keys are read through the official `bw` CLI and never written to disk. Without Vaultwarden, save a username, password or private key in czlterm instead (paste it, drop the key file or pick it); it is stored encrypted and, with cloud sync on, synced end-to-end encrypted
 - **File manager**: browse, upload, download, rename and delete over SFTP; double-click a file to open it in VS Code (or your editor of choice), and it is uploaded back when you save
 - **MCP**: AI clients can list your connections and, on servers you allow, read and write files and run commands
-- **Sync**: each connection is one JSON file (no secrets), synced through git to your own private repository. Optionally set a username and key (an access token for HTTPS, a private key for SSH, stored in the system keychain); otherwise git's own authentication is used
+- **Cloud sync and teams (optional, paid)**: sign in with CZL Connect to sync connections and scripts across computers and share them with a team. Sync is end-to-end encrypted: data is encrypted on your device and the server only stores ciphertext. A new computer is unlocked with your recovery code or approved from a signed-in device. Without signing in, everything stays on this computer and every other feature works as before
 - **English and Chinese UI**: follows the system language by default, switchable in Settings → General
 - **Machine info**: after each SSH connection, OS, kernel, CPU, memory, disk and uptime are collected in the background and shown on the overview page; the connection list shows the matching OS logo
 - Built with Go and Wails; the UI runs in the system WebView, no bundled browser engine
@@ -23,8 +23,8 @@ A lightweight connection manager. SSH runs your system OpenSSH in a built-in tab
 | SFTP file manager; double-click to edit, saved back automatically | Connect opens a terminal tab (or your system terminal); czlterm supplies the key or password |
 | ![Edit connection: credentials reference Vaultwarden items](docs/screenshots/edit-connection.webp) | ![MCP settings](docs/screenshots/settings-mcp.webp) |
 | Credentials only reference Vaultwarden items; no plaintext in the config | Tiered MCP permissions, multi-line scripts supported |
-| ![Sync settings](docs/screenshots/settings-sync.webp) | ![About and updates](docs/screenshots/settings-about.webp) |
-| Git sync to your own private repo, optional username and key | Built-in updates, verified against SHA-256 before installing |
+| ![About and updates](docs/screenshots/settings-about.webp) | |
+| Built-in updates, verified against SHA-256 before installing | |
 
 (Screenshots show the Chinese UI; English is also available.)
 
@@ -37,6 +37,8 @@ Download from [Releases](https://github.com/woodchen-ink/czlterm/releases):
 
 Introduction and discussion (Chinese): [SunAI forum thread](https://www.sunai.net/t/topic/1533)
 
+> **Prefer git sync, or no sign-in at all?** Starting with 2026.11.0, sync goes through CZL Connect (end-to-end encrypted, paid) and git sync to your own repository has been removed. If you want to keep git sync and never see sign-in features, stay on [v0.1.24](https://github.com/woodchen-ink/czlterm/releases/tag/v0.1.24) and skip the update prompt. Newer versions read the same data folder, so you can upgrade later.
+
 ## Requirements
 
 - The `bw` CLI, logged in once from a terminal:
@@ -48,7 +50,6 @@ Introduction and discussion (Chinese): [SunAI forum thread](https://www.sunai.ne
   After that, unlock with your master password inside czlterm
 - Store private keys as Bitwarden "SSH key" items. If a key has a passphrase, add a custom field named `passphrase` to the item
 - OpenSSH 8.4 or newer (needed for `SSH_ASKPASS_REQUIRE`). Windows 10 ships OpenSSH 8.1; upgrade with `winget install Microsoft.OpenSSH.Preview`
-- Sync needs git installed with access to your repository
 
 ## How credentials reach external programs
 
@@ -95,7 +96,7 @@ czlterm checks GitHub Releases 30 seconds after launch and every 6 hours after t
 | macOS | `~/Library/Application Support/CZL/czlterm/` |
 | Windows | `%LOCALAPPDATA%\CZL\czlterm\` |
 
-Subfolders: `config/` local settings, `data/` connections (a git repository), `logs/`, `cache/`.
+Subfolders: `config/` local settings, sign-in record and encryption keys (encrypted with a key held in the system keychain), `data/` connections and scripts (`data/spaces/` holds the local copies of synced spaces), `logs/`, `cache/`.
 
 ## Build
 
@@ -104,7 +105,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 cd desktop && wails build
 ```
 
-Windows installer: `.\build.ps1` (needs NSIS). Pushing a `v*` tag makes GitHub Actions build the Windows installer and macOS DMG and publish them to Releases.
+Windows installer: `.\build.ps1` (needs NSIS). Pushing a `v*` tag makes GitHub Actions build the Windows installer and macOS DMG and publish them to Releases. Versions are numbered by release date, `vYEAR.MONTH.N` (for example `v2026.11.0`); versions up to v0.1.24 used semantic numbers, and the updater treats the date versions as newer.
 
 ## License
 

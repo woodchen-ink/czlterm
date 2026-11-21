@@ -5,10 +5,10 @@
 轻量的连接管理器。SSH 在内置的多标签终端里运行系统 OpenSSH，VNC 在内置查看器里打开，RDP 交给系统自带的客户端，czlterm 负责管理连接、从 Vaultwarden 取凭据、管理远程文件，以及给 AI 提供 MCP 接口。
 
 - **内置终端与 VNC 查看器**：SSH 默认在程序里的终端标签中打开，可同时开多个；也可以在设置里改用系统终端（Terminal、iTerm2、Ghostty、WezTerm、kitty、Windows Terminal、PowerShell）。VNC 在标签页里打开（noVNC），连 Mac 时自动填用户名和密码，画面随窗口缩放，可弹出成独立窗口；也可以在设置里改用屏幕共享（macOS）或 TigerVNC（Windows）。RDP 在 macOS 上用 Windows App，在 Windows 上用 mstsc
-- **凭据来自 Vaultwarden**：通过官方 `bw` CLI 读取密码和 SSH 私钥，不写入磁盘
+- **凭据来自 Vaultwarden，或保存在 czlterm 里**：通过官方 `bw` CLI 读取密码和 SSH 私钥，不写入磁盘。不用 Vaultwarden 时，也可以把用户名、密码或私钥保存在 czlterm 里（粘贴、拖入私钥文件或选择文件），加密存放；开启云同步后随空间端到端加密同步
 - **文件管理**：通过 SFTP 浏览、上传、下载、重命名、删除；双击文件会用 VS Code 等编辑器打开，保存后自动传回服务器
 - **MCP**：AI 客户端可以列出连接，并在你授权的服务器上读写文件、执行命令
-- **同步**：每个连接存成一个 JSON 文件（不含密码），通过 git 同步到你自己的私有仓库。可以单独设置用户名和密钥（HTTPS 填访问令牌，SSH 粘贴私钥，密钥存进系统钥匙串）；不设置就用 git 默认的认证
+- **云同步与团队（可选，付费）**：登录 CZL Connect 后，连接与脚本可以在多台电脑之间同步，也能和团队共享。同步是端到端加密的：数据在本机加密后才上传，服务端只存密文；换电脑时用恢复码，或让已登录的设备批准来解锁。不登录时数据只在本机，其它功能照常
 - **中英文界面**：默认跟随系统语言，可在 设置 → 通用 中切换
 - **机器信息**：每次 SSH 连接后，在后台采集系统、内核、CPU、内存、磁盘和运行时长，显示在概览页；连接列表里显示对应的系统图标
 - 基于 Go 和 Wails，界面用系统 WebView 渲染，不打包浏览器内核
@@ -23,8 +23,8 @@
 | SFTP 文件管理，双击用编辑器打开，保存后自动传回 | 连接时在终端标签（或系统终端）里打开，私钥和密码由 czlterm 自动提供 |
 | ![编辑连接：凭据引用 Vaultwarden 条目](docs/screenshots/edit-connection.webp) | ![MCP 设置](docs/screenshots/settings-mcp.webp) |
 | 凭据只引用 Vaultwarden 条目，配置里没有明文密码 | MCP 权限分级开关，支持多行脚本 |
-| ![同步设置](docs/screenshots/settings-sync.webp) | ![关于与在线更新](docs/screenshots/settings-about.webp) |
-| git 同步到自己的私有仓库，用户名和密钥可选 | 在线更新，下载后校验 SHA-256 |
+| ![关于与在线更新](docs/screenshots/settings-about.webp) | |
+| 在线更新，下载后校验 SHA-256 | |
 
 ## 凭据怎么传给外部程序
 
@@ -53,6 +53,8 @@
 
 介绍与讨论：[SunAI 论坛帖](https://www.sunai.net/t/topic/1533)
 
+> **想继续用 git 同步、不需要登录功能？** 从 2026.11.0 起，同步改为经 CZL Connect（端到端加密，付费），git 同步到自己仓库的功能已移除。需要 git 同步、不想要登录相关功能的，可以自行保持使用 [v0.1.24](https://github.com/woodchen-ink/czlterm/releases/tag/v0.1.24)，出现更新提示时跳过即可。新版本读取同一个数据目录，以后想升级随时可以。
+
 ## 前置条件
 
 - `bw` CLI，并在终端里登录过一次：
@@ -64,7 +66,6 @@
   之后在 czlterm 里输入主密码解锁即可
 - 私钥存成 Bitwarden 的「SSH 密钥」条目。如果私钥有口令，在条目里加一个名为 `passphrase` 的自定义字段
 - OpenSSH 8.4 或更高版本（`SSH_ASKPASS_REQUIRE` 从这个版本开始支持）。Windows 10 自带的 OpenSSH 是 8.1，需要升级：`winget install Microsoft.OpenSSH.Preview`
-- 同步功能需要系统已安装 git，并已配置好访问仓库的认证
 
 ## MCP
 
@@ -91,7 +92,7 @@
 | macOS | `~/Library/Application Support/CZL/czlterm/` |
 | Windows | `%LOCALAPPDATA%\CZL\czlterm\` |
 
-子目录：`config/` 放本机设置，`data/` 放连接配置（这是一个 git 仓库），`logs/` 放日志，`cache/` 放临时文件。
+子目录：`config/` 放本机设置、登录记录与加密密钥（用系统钥匙串里的密钥加密），`data/` 放连接与脚本（`data/spaces/` 是各同步空间的本机副本），`logs/` 放日志，`cache/` 放临时文件。
 
 ## 构建
 
@@ -100,7 +101,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 cd desktop && wails build
 ```
 
-Windows 安装包：`.\build.ps1`（需要 NSIS）。推送 `v*` 标签后，GitHub Actions 会构建 Windows 安装包和 macOS DMG 并发布到 Releases。
+Windows 安装包：`.\build.ps1`（需要 NSIS）。推送 `v*` 标签后，GitHub Actions 会构建 Windows 安装包和 macOS DMG 并发布到 Releases。版本号按发布日期编为 `v年.月.序号`（如 `v2026.11.0`）；v0.1.24 及以前是语义化版本号，在线更新会把日期版本认作更新的版本。
 
 ## 许可证
 
