@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeftIcon,
   BotIcon,
+  CircleUserIcon,
   CloudIcon,
   CopyIcon,
   InfoIcon,
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 
 import { AboutPanel } from "@/components/about-panel";
 import { AccountPanel } from "@/components/cloud/account-panel";
+import { SyncPanel } from "@/components/cloud/sync-panel";
 import { TeamPanel } from "@/components/cloud/team-panel";
 import { CredentialsPanel } from "@/components/credentials-panel";
 import { useVault } from "@/components/vault-provider";
@@ -34,11 +36,12 @@ import { api, openExternal, type MCPConfig, type Settings, type SettingsView } f
 import { errorText } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
-export type SettingsTab = "general" | "account" | "teams" | "credentials" | "apps" | "vault" | "mcp" | "about";
+export type SettingsTab = "general" | "account" | "sync" | "teams" | "credentials" | "apps" | "vault" | "mcp" | "about";
 
 const sections: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "general", label: "通用", icon: LanguagesIcon },
-  { id: "account", label: "账号与同步", icon: CloudIcon },
+  { id: "account", label: "账号", icon: CircleUserIcon },
+  { id: "sync", label: "云同步", icon: CloudIcon },
   { id: "teams", label: "团队", icon: UsersIcon },
   { id: "credentials", label: "凭据", icon: KeySquareIcon },
   { id: "apps", label: "外部程序", icon: SquareTerminalIcon },
@@ -48,7 +51,7 @@ const sections: { id: SettingsTab; label: string; icon: React.ComponentType<{ cl
 ];
 
 /** 这些分区自己处理保存 (即时生效), 底部不显示保存条。 */
-const selfSaving: SettingsTab[] = ["general", "account", "teams", "credentials", "about"];
+const selfSaving: SettingsTab[] = ["general", "account", "sync", "teams", "credentials", "about"];
 
 /** 整页设置: 左侧分区导航, 右侧内容独立滚动, 底部保存条固定。 */
 export function SettingsPage({
@@ -166,11 +169,15 @@ export function SettingsPage({
             </div>
           ) : tab === "account" ? (
             <div className="mx-auto max-w-2xl p-6">
-              <AccountPanel onOpenTeams={() => setTab("teams")} />
+              <AccountPanel onOpenSync={() => setTab("sync")} onOpenTeams={() => setTab("teams")} />
+            </div>
+          ) : tab === "sync" ? (
+            <div className="mx-auto max-w-3xl p-6">
+              <SyncPanel onOpenTeams={() => setTab("teams")} />
             </div>
           ) : tab === "teams" ? (
             <div className="mx-auto max-w-2xl p-6">
-              <TeamPanel onOpenAccount={() => setTab("account")} />
+              <TeamPanel onOpenAccount={() => setTab("account")} onOpenSync={() => setTab("sync")} />
             </div>
           ) : tab === "credentials" ? (
             <div className="mx-auto max-w-2xl p-6">

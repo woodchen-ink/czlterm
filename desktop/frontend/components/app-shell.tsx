@@ -247,6 +247,14 @@ function Shell() {
           toast.error(errorText(e));
         }
       },
+      copyGroupTo: async (group, key, label) => {
+        try {
+          const n = await api.CopyGroupTo(group, key);
+          toast.success(t("已把文件夹「{0}」的 {1} 条连接复制到「{2}」", group, n, label));
+        } catch (e) {
+          toast.error(errorText(e));
+        }
+      },
       runScript,
       manageScripts: () => setScriptsOpen(true),
     }),

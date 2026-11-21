@@ -5,6 +5,7 @@ import { useLanguage } from "@/components/language-provider";
 
 import { useState } from "react";
 import {
+  CircleUserIcon,
   CloudIcon,
   FileCode2Icon,
   LockKeyholeIcon,
@@ -41,7 +42,7 @@ const vaultLabels: Record<string, string> = {
   unavailable: "未找到 bw",
 };
 
-export type AccountTab = "account" | "teams";
+export type AccountTab = "account" | "sync" | "teams";
 
 /**
  * 侧栏底部: 左边是账号 (头像、名字、云同步状态; 点开是账号菜单), 右边是保险库锁、脚本库、设置三个常用入口。
@@ -119,11 +120,14 @@ export function StatusBar({
               <DropdownMenuItem onSelect={() => void syncNow()} disabled={syncing || cloud?.keyStatus !== "unlocked"}>
                 <RefreshCwIcon className={cn(syncing && "animate-spin")} /> {t("立即同步")}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onAccount("account")}>
-                <CloudIcon /> {t("账号与同步")}
+              <DropdownMenuItem onSelect={() => onAccount("sync")}>
+                <CloudIcon /> {t("云同步")}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onAccount("teams")}>
                 <UsersIcon /> {t("团队")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onAccount("account")}>
+                <CircleUserIcon /> {t("账号")}
               </DropdownMenuItem>
             </>
           ) : (

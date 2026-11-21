@@ -143,60 +143,110 @@ func sameContent(a, b any) bool {
 // CopyConnection 把一条连接复制到 to, 换新 id; 它的跳板链与引用的凭据一并复制 (各自换新 id 并改写引用),
 // 目标空间里不会出现指向来源空间的引用。返回新连接。
 func CopyConnection(from, to *Space, id string) (conn.Connection, error) {
-	if from == to {
-		return conn.Connection{}, errcode.ErrSpaceSame
-	}
-	if err := to.writable(); err != nil {
+	out, err := CopyConnections(from, to, []string{id})
+	if err != nil {
 		return conn.Connection{}, err
 	}
-	c, err := from.Conns.Get(id)
-	if err != nil {
-		return c, err
-	}
-	chain := []conn.Connection{c}
-	for cur := c; cur.Jump != "" && len(chain) <= conn.MaxJumpDepth; {
-		j, err := from.Conns.Get(cur.Jump)
-		if err != nil {
-			break
+	return out[0], nil
+}
+
+// CopyGroup 把 from 里分组 (文件夹) 为 group 的全部连接复制到 to, 文件夹名与彼此的跳板关系保持不变。
+// group 为空表示未分组的连接。返回复制的连接 (不含为跳板一并带过去的组外连接)。
+func CopyGroup(from, to *Space, group string) ([]conn.Connection, error) {
+	list, _ := from.Conns.List()
+	var ids []string
+	for _, c := range list {
+		if c.Group == group {
+			ids = append(ids, c.ID)
 		}
-		chain = append(chain, j)
-		cur = j
+	}
+	if len(ids) == 0 {
+		return nil, errcode.ErrGroupEmpty
+	}
+	return CopyConnections(from, to, ids)
+}
+
+// CopyConnections 把一批连接复制到 to, 各换新 id。同一批里共用的跳板机与凭据只复制一份,
+// 批内互为跳板的关系改写到新 id; 批外的跳板机一并复制过去。返回与 ids 同序的新连接。
+func CopyConnections(from, to *Space, ids []string) ([]conn.Connection, error) {
+	if from == to {
+		return nil, errcode.ErrSpaceSame
+	}
+	if err := to.writable(); err != nil {
+		return nil, err
 	}
 	to.mu.Lock()
 	defer to.mu.Unlock()
+
+	connIDs := map[string]string{}
 	credIDs := map[string]string{}
-	// 从链尾往前写: 先有跳板机, 再有引用它的连接。
-	next := ""
-	for i := len(chain) - 1; i >= 0; i-- {
-		cp := chain[i]
-		if cp.Auth == conn.AuthStored && cp.Credential != "" {
-			newCred, ok := credIDs[cp.Credential]
+	var written []string
+	// copyOne 先复制跳板机再写引用它的连接; 跳板缺失时照旧链断在这里 (与单条复制一致)。
+	var copyOne func(id string, depth int) (string, error)
+	copyOne = func(id string, depth int) (string, error) {
+		if nid, ok := connIDs[id]; ok {
+			return nid, nil
+		}
+		c, err := from.Conns.Get(id)
+		if err != nil {
+			return "", err
+		}
+		next := ""
+		if c.Jump != "" && depth < conn.MaxJumpDepth {
+			if j, err := copyOne(c.Jump, depth+1); err == nil {
+				next = j
+			}
+		}
+		if c.Auth == conn.AuthStored && c.Credential != "" {
+			nc, ok := credIDs[c.Credential]
 			if !ok {
-				src, err := from.Creds.Get(cp.Credential)
+				src, err := from.Creds.Get(c.Credential)
 				if err != nil {
-					return c, err
+					return "", err
 				}
 				src.ID = conn.NewID()
 				if err := to.putLocked(src); err != nil {
-					return c, err
+					return "", err
 				}
-				newCred = src.ID
-				credIDs[cp.Credential] = newCred
+				nc = src.ID
+				credIDs[c.Credential] = nc
 			}
-			cp.Credential = newCred
+			c.Credential = nc
 		}
-		cp.ID, cp.Jump = conn.NewID(), next
-		if err := to.putLocked(cp); err != nil {
-			return c, err
+		c.ID, c.Jump = conn.NewID(), next
+		if err := to.putLocked(c); err != nil {
+			return "", err
 		}
 		if to.trust != nil {
-			to.trust.set(cp)
+			to.trust.set(c)
 		}
-		next = cp.ID
-		chain[i] = cp
+		connIDs[id] = c.ID
+		written = append(written, c.ID)
+		return c.ID, nil
 	}
-	go to.poke(CollConnections, chain[0].ID)
-	return to.Conns.Get(chain[0].ID)
+
+	newIDs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		nid, err := copyOne(id, 0)
+		if err != nil {
+			return nil, err
+		}
+		newIDs = append(newIDs, nid)
+	}
+	go func() {
+		for _, id := range written {
+			to.poke(CollConnections, id)
+		}
+	}()
+	out := make([]conn.Connection, 0, len(newIDs))
+	for _, id := range newIDs {
+		c, err := to.Conns.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 // CopyScript 把一条脚本复制到 to, 换新 id。

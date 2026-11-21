@@ -5,7 +5,7 @@ import { useLanguage } from "@/components/language-provider";
 
 import { CheckIcon, ChevronsUpDownIcon, CloudIcon, HardDriveIcon, LockIcon, UsersIcon } from "lucide-react";
 
-import { spaceStatus, StatusDot } from "@/components/cloud/account-panel";
+import { spaceStatus, StatusDot } from "@/components/cloud/shared";
 import { spaceLabel, useCloud } from "@/components/cloud/cloud-provider";
 import {
   DropdownMenu,

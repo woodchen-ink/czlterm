@@ -282,6 +282,20 @@ func (a *App) CopyConnectionTo(id, target string) (conn.Connection, error) {
 	return space.CopyConnection(from, to, id)
 }
 
+// CopyGroupTo 把当前空间里一个文件夹 (分组) 的全部连接复制到另一个空间, 文件夹名与彼此的跳板关系保持,
+// 引用的凭据与组外跳板机一并带过去。group 为空表示未分组的连接。返回复制的条数。
+func (a *App) CopyGroupTo(group, target string) (int, error) {
+	if err := a.ready(); err != nil {
+		return 0, err
+	}
+	to := a.spaces.Get(target)
+	if to == nil || !a.spaces.Visible(target) {
+		return 0, errcode.ErrSpaceUnknown
+	}
+	out, err := space.CopyGroup(a.currentSpace(), to, group)
+	return len(out), err
+}
+
 // CopyScriptTo 把脚本复制到另一个空间。
 func (a *App) CopyScriptTo(id, target string) error {
 	if err := a.ready(); err != nil {

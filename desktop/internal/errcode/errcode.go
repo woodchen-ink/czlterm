@@ -117,4 +117,6 @@ var (
 	ErrSpaceSame = New(6413, "space_same_as_source")
 	// 同一 id 已在本机另一个空间
 	ErrSpaceMismatch = New(6414, "id_in_other_space")
+	// 要复制的文件夹里没有连接
+	ErrGroupEmpty = New(6417, "group_empty")
 )

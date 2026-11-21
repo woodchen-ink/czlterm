@@ -110,6 +110,7 @@ export const englishErrors: Record<string, string> = {
   "6412": "The device request expired or was rejected. Start a new one",
   "6413": "The target space is the same as the source",
   "6414": "This item already exists in another space on this device",
+  "6417": "The folder has no connections to copy",
   "6415": "Could not save the recovery code file",
   "6416": "This team connection needs to be confirmed first",
   "7001": "Could not listen on the MCP port",

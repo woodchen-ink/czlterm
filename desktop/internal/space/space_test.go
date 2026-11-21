@@ -7,6 +7,7 @@ import (
 
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
 	"github.com/woodchen-ink/czlterm/desktop/internal/cred"
+	"github.com/woodchen-ink/czlterm/desktop/internal/errcode"
 	"github.com/woodchen-ink/czlterm/desktop/internal/secret"
 )
 
@@ -217,4 +218,66 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+// 整个文件夹复制到团队: 文件夹名与组内跳板关系保留, 共用的跳板机与凭据只复制一份, 组外跳板机一并带过去。
+func TestCopyGroup(t *testing.T) {
+	org := OrgPrefix + "o1@u1"
+	r := newRegistry(t, me, org)
+	src, dst := r.Get(me), r.Get(org)
+	sum, err := src.SaveCredential(cred.Credential{Name: "root", Username: "root", Password: "pw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside, err := src.SaveConnection(conn.Connection{Name: "edge", Group: "infra", Protocol: "ssh", Host: "edge"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bastion, err := src.SaveConnection(conn.Connection{Name: "bastion", Group: "prod", Protocol: "ssh", Host: "b", Jump: outside.ID, Auth: conn.AuthStored, Credential: sum.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range []string{"web1", "web2"} {
+		if _, err := src.SaveConnection(conn.Connection{Name: h, Group: "prod", Protocol: "ssh", Host: h, Jump: bastion.ID, Auth: conn.AuthStored, Credential: sum.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := src.SaveConnection(conn.Connection{Name: "other", Group: "dev", Protocol: "ssh", Host: "o"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := CopyGroup(src, dst, "prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 3 {
+		t.Fatalf("copied %d, want 3", len(out))
+	}
+	list, _ := dst.Conns.List()
+	byName := map[string]conn.Connection{}
+	for _, c := range list {
+		if _, dup := byName[c.Name]; dup {
+			t.Fatalf("%s copied twice", c.Name)
+		}
+		byName[c.Name] = c
+	}
+	if len(list) != 4 || byName["other"].ID != "" {
+		t.Fatalf("target has %d connections: %v", len(list), byName)
+	}
+	b := byName["bastion"]
+	if b.Group != "prod" || b.Jump != byName["edge"].ID || byName["edge"].Group != "infra" {
+		t.Fatalf("bastion = %+v, edge = %+v", b, byName["edge"])
+	}
+	for _, h := range []string{"web1", "web2"} {
+		if w := byName[h]; w.Jump != b.ID || w.Credential != b.Credential || w.Group != "prod" {
+			t.Fatalf("%s = %+v, bastion = %+v", h, w, b)
+		}
+	}
+	creds, _ := dst.Creds.List()
+	if len(creds) != 1 || creds[0].ID == sum.ID {
+		t.Fatalf("target credentials = %+v", creds)
+	}
+	if _, err := CopyGroup(src, dst, "missing"); err != errcode.ErrGroupEmpty {
+		t.Fatalf("empty group err = %v", err)
+	}
 }

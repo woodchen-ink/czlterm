@@ -4,12 +4,11 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/components/language-provider";
 
 import { useCallback, useEffect, useState } from "react";
-import { CopyIcon, Loader2Icon, LogOutIcon, MailIcon, PlusIcon, TicketIcon, TrashIcon, UsersIcon } from "lucide-react";
+import { AlertTriangleIcon, CopyIcon, Loader2Icon, LogOutIcon, MailIcon, PlusIcon, TicketIcon, TrashIcon, UsersIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { roleLabel, Section } from "@/components/cloud/account-panel";
 import { useCloud } from "@/components/cloud/cloud-provider";
-import { planStorage, PlansDialog } from "@/components/cloud/plans-dialog";
+import { Loading, Notice, roleLabel, Section } from "@/components/cloud/shared";
 import { UserAvatar } from "@/components/cloud/user-avatar";
 import {
   AlertDialog,
@@ -32,8 +31,8 @@ import { formatDate } from "@/lib/format";
 const DOWNLOAD_URL = "https://github.com/woodchen-ink/czlterm/releases/latest";
 const ROLES = ["admin", "member", "viewer"] as const;
 
-/** 设置 → 团队: 建团队、凭码加入、成员与角色、邀请、团队订阅、退出与解散。 */
-export function TeamPanel({ onOpenAccount }: { onOpenAccount: () => void }) {
+/** 设置 → 团队: 建团队、凭码加入、成员与角色、邀请、退出与解散。订阅在「云同步」页。 */
+export function TeamPanel({ onOpenAccount, onOpenSync }: { onOpenAccount: () => void; onOpenSync: () => void }) {
   useLanguage();
   const { user, billing, refreshCloud, openOrgSpace } = useCloud();
   const [orgs, setOrgs] = useState<Org[] | null>(null);
@@ -83,13 +82,7 @@ export function TeamPanel({ onOpenAccount }: { onOpenAccount: () => void }) {
       </Section>
     );
   }
-  if (!orgs) {
-    return (
-      <div className="text-muted-foreground flex items-center justify-center py-16">
-        <Loader2Icon className="animate-spin" />
-      </div>
-    );
-  }
+  if (!orgs) return <Loading />;
 
   const afterJoin = async (id: string) => {
     setDialog("");
@@ -136,6 +129,7 @@ export function TeamPanel({ onOpenAccount }: { onOpenAccount: () => void }) {
           key={detail.id}
           detail={detail}
           billing={billing}
+          onOpenSync={onOpenSync}
           onChanged={loadDetail}
           onOpenSpace={() =>
             void openOrgSpace(detail.id).then((ok) =>
@@ -181,12 +175,14 @@ export function TeamPanel({ onOpenAccount }: { onOpenAccount: () => void }) {
 function OrgView({
   detail,
   billing,
+  onOpenSync,
   onChanged,
   onOpenSpace,
   onLeft,
 }: {
   detail: OrgDetail;
   billing: ReturnType<typeof useCloud>["billing"];
+  onOpenSync: () => void;
   onChanged: () => Promise<void>;
   onOpenSpace: () => void;
   onLeft: () => Promise<void>;
@@ -199,11 +195,9 @@ function OrgView({
   const [codeRole, setCodeRole] = useState("member");
   const [newCode, setNewCode] = useState<NewInviteCode | null>(null);
   const [busy, setBusy] = useState("");
-  const [plansOpen, setPlansOpen] = useState(false);
   const [confirm, setConfirm] = useState<null | { title: string; body: string; action: string; run: () => Promise<void> }>(null);
 
   const ent = billing?.entitlements?.orgs?.find((o) => o.orgId === detail.id);
-  const plans = (billing?.plans ?? []).filter((p) => p.subjectType === "org" && (!p.status || p.status === "active"));
 
   async function run(name: string, fn: () => Promise<void>) {
     setBusy(name);
@@ -270,34 +264,17 @@ function OrgView({
         </Button>
       </div>
 
-      {billing?.enabled && (
-        <Section
-          icon={UsersIcon}
-          title={t("团队订阅")}
-          action={
-            admin && plans.length > 0 && (
-              <Button size="sm" onClick={() => setPlansOpen(true)}>
-                {ent?.entitlement?.active ? t("续费或升级") : t("开通")}
-              </Button>
-            )
-          }
-        >
-          {ent?.entitlement?.active ? (
-            <p className="text-sm">
-              <span className="font-medium">{ent.entitlement.planName || ent.entitlement.plan}</span>
-              <span className="text-muted-foreground">
-                {" · "}
-                {t("有效期至 {0}", formatDate(ent.entitlement.periodEnd))}
-                {` · ${t("{0} 席", ent.entitlement.seats)}`}
-                {planStorage(ent.entitlement.quotas) > 0 && ` · ${t("{0} GB 存储", planStorage(ent.entitlement.quotas))}`}
-              </span>
-            </p>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              {admin ? t("团队还没有有效订阅, 团队空间现在只读。") : t("团队还没有有效订阅, 请联系团队管理员开通。")}
-            </p>
+      {billing?.enabled && ent && !ent.entitlement?.active && (
+        <Notice tone="warning" icon={AlertTriangleIcon}>
+          <span className="flex-1">
+            {admin ? t("团队还没有有效订阅, 团队空间现在只读。") : t("团队还没有有效订阅, 请联系团队管理员开通。")}
+          </span>
+          {admin && (
+            <Button size="sm" onClick={onOpenSync}>
+              {t("去订阅")}
+            </Button>
           )}
-        </Section>
+        </Notice>
       )}
 
       <Section icon={UsersIcon} title={t("团队成员")}>
@@ -476,15 +453,6 @@ function OrgView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <PlansDialog
-        open={plansOpen}
-        onOpenChange={setPlansOpen}
-        subject={`org:${detail.id}`}
-        plans={plans}
-        currentPlan={ent?.entitlement?.active ? ent.entitlement.plan : undefined}
-        title={t("「{0}」团队订阅", detail.name)}
-      />
 
       <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>

@@ -31,6 +31,8 @@ export interface ConnectionActions {
   remove: (c: ConnectionView) => void;
   /** 复制到另一个空间 (换新 id, 跳板链一并复制)。 */
   copyTo: (c: ConnectionView, space: string, label: string) => void;
+  /** 把整个文件夹复制到另一个空间 (文件夹名与组内跳板关系保留, 凭据与组外跳板机一并带过去)。 */
+  copyGroupTo: (group: string, space: string, label: string) => void;
   runScript: (c: ConnectionView, s: Script) => void;
   manageScripts: () => void;
 }
@@ -54,7 +56,9 @@ export function ConnectionList({
   actions: ConnectionActions;
 }) {
   useLanguage();
+  const { spaces } = useCloud();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const targets = (spaces?.spaces ?? []).filter((s) => s.key !== spaces?.current && !s.readOnly);
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -89,16 +93,37 @@ export function ConnectionList({
         return (
           <div key={group || "__none"}>
             {group && (
-              <button
-                type="button"
-                className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 px-3 py-1 text-xs font-medium"
-                onClick={() => setCollapsed((s) => ({ ...s, [group]: !s[group] }))}
-              >
-                <ChevronRightIcon className={cn("size-3 transition-transform", !isCollapsed && "rotate-90")} />
-                <FolderIcon className="size-3" />
-                <span className="truncate">{group}</span>
-                <span className="ml-auto tabular-nums">{list.length}</span>
-              </button>
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 px-3 py-1 text-xs font-medium"
+                    onClick={() => setCollapsed((s) => ({ ...s, [group]: !s[group] }))}
+                  >
+                    <ChevronRightIcon className={cn("size-3 transition-transform", !isCollapsed && "rotate-90")} />
+                    <FolderIcon className="size-3" />
+                    <span className="truncate">{group}</span>
+                    <span className="ml-auto tabular-nums">{list.length}</span>
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-52">
+                  <ContextMenuItem onSelect={() => setCollapsed((s) => ({ ...s, [group]: !s[group] }))}>
+                    {isCollapsed ? t("展开") : t("折叠")}
+                  </ContextMenuItem>
+                  {targets.length > 0 && (
+                    <ContextMenuSub>
+                      <ContextMenuSubTrigger>{t("整个文件夹复制到…")}</ContextMenuSubTrigger>
+                      <ContextMenuSubContent>
+                        {targets.map((s) => (
+                          <ContextMenuItem key={s.key} onSelect={() => actions.copyGroupTo(group, s.key, spaceLabel(s))}>
+                            {spaceLabel(s)}
+                          </ContextMenuItem>
+                        ))}
+                      </ContextMenuSubContent>
+                    </ContextMenuSub>
+                  )}
+                </ContextMenuContent>
+              </ContextMenu>
             )}
             {!isCollapsed &&
               list.map((c) => (
