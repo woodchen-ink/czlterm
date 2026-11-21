@@ -6,6 +6,7 @@ import { useLanguage } from "@/components/language-provider";
 import { useMemo, useState } from "react";
 import { ChevronRightIcon, FolderIcon } from "lucide-react";
 
+import { spaceLabel, useCloud } from "@/components/cloud/cloud-provider";
 import { CountryFlag } from "@/components/country-flag";
 import { OSIcon } from "@/components/os-icon";
 import { ProtocolIcon } from "@/components/protocol-icon";
@@ -28,6 +29,8 @@ export interface ConnectionActions {
   edit: (c: ConnectionView) => void;
   duplicate: (c: ConnectionView) => void;
   remove: (c: ConnectionView) => void;
+  /** 复制到另一个空间 (换新 id, 跳板链一并复制)。 */
+  copyTo: (c: ConnectionView, space: string, label: string) => void;
   runScript: (c: ConnectionView, s: Script) => void;
   manageScripts: () => void;
 }
@@ -35,6 +38,7 @@ export interface ConnectionActions {
 /** 侧栏连接列表: 按分组折叠, 双击连接, 右键更多操作。 */
 export function ConnectionList({
   items,
+  readOnly,
   scripts,
   query,
   selectedId,
@@ -42,6 +46,7 @@ export function ConnectionList({
   actions,
 }: {
   items: ConnectionView[];
+  readOnly: boolean;
   scripts: Script[];
   query: string;
   selectedId: string;
@@ -67,7 +72,11 @@ export function ConnectionList({
   }, [items, query]);
 
   if (items.length === 0) {
-    return <p className="text-muted-foreground px-4 py-6 text-center text-sm">{t("还没有连接, 点上方 + 新建")}</p>;
+    return (
+      <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+        {readOnly ? t("这个空间还没有连接") : t("还没有连接, 点上方 + 新建")}
+      </p>
+    );
   }
   if (groups.length === 0) {
     return <p className="text-muted-foreground px-4 py-6 text-center text-sm">{t("没有匹配的连接")}</p>;
@@ -99,6 +108,7 @@ export function ConnectionList({
                   scripts={scripts}
                   indent={!!group}
                   selected={c.id === selectedId}
+                  readOnly={readOnly}
                   onSelect={() => onSelect(c.id)}
                   actions={actions}
                 />
@@ -115,6 +125,7 @@ function ConnectionRow({
   scripts,
   indent,
   selected,
+  readOnly,
   onSelect,
   actions,
 }: {
@@ -122,10 +133,14 @@ function ConnectionRow({
   scripts: Script[];
   indent: boolean;
   selected: boolean;
+  readOnly: boolean;
   onSelect: () => void;
   actions: ConnectionActions;
 }) {
   useLanguage();
+  const { spaces } = useCloud();
+  // 可复制去的空间: 除当前外、可写的
+  const targets = (spaces?.spaces ?? []).filter((s) => s.key !== spaces?.current && !s.readOnly);
   const target = c.username ? `${c.username}@${c.host}` : c.host;
   return (
     <ContextMenu>
@@ -138,7 +153,7 @@ function ConnectionRow({
           className={cn(
             "mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded-md px-2 py-1.5 text-left",
             indent && "pl-5",
-            selected ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/60",
+            selected ? "bg-brand-soft text-brand-strong" : "hover:bg-sidebar-accent/60",
           )}
         >
           {c.osId ? (
@@ -171,10 +186,22 @@ function ConnectionRow({
           </ContextMenuSub>
         )}
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => actions.edit(c)}>{t("编辑")}</ContextMenuItem>
-        <ContextMenuItem onSelect={() => actions.duplicate(c)}>{t("复制")}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => actions.edit(c)} disabled={readOnly}>{t("编辑")}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => actions.duplicate(c)} disabled={readOnly}>{t("复制")}</ContextMenuItem>
+        {targets.length > 0 && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>{t("复制到…")}</ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {targets.map((s) => (
+                <ContextMenuItem key={s.key} onSelect={() => actions.copyTo(c, s.key, spaceLabel(s))}>
+                  {spaceLabel(s)}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
         <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => actions.remove(c)}>
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => actions.remove(c)} disabled={readOnly}>
           {t("删除")}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

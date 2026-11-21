@@ -5,13 +5,18 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-strong: var(--brand-strong);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-brand-from: var(--brand-from);
   --color-brand-to: var(--brand-to);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* 拉丁字符用 Geist, 中文回落到系统黑体; 不能写成 var(--font-sans) 自引用, 那会让整页退回衬线体。 */
-  --font-sans: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
+  /* CZL 默认字体栈, 只用设备本地字体; 写字面值, 不能 var() 自引用 (会让整页退回衬线体)。 */
+  --font-sans: -apple-system, "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", "Cascadia Code", Consolas, "Liberation Mono", Menlo, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -80,6 +85,12 @@
   /* 品牌渐变, 仅用于 logo / 核心标题 / 激活指示条, 禁止大面积铺 */
   --brand-from: #1D2088;
   --brand-to: #2EA7E0;
+  /* 品牌三件套: brand 只做指示 (ring、进度、状态点), brand-soft + brand-strong 是导航当前项与选中行 */
+  --brand: #2EA7E0;
+  --brand-soft: #E3F2FB;
+  --brand-strong: #0F5F86;
+  --success: #3F8F5E;
+  --warning: #B07A1E;
   --radius: 0.5rem;
   --sidebar: #E7ECF2;
   --sidebar-foreground: #2A313A;
@@ -117,6 +128,11 @@
   --chart-5: #2B3B57;
   --brand-from: #1D2088;
   --brand-to: #2EA7E0;
+  --brand: #2EA7E0;
+  --brand-soft: #14324A;
+  --brand-strong: #8FD3F5;
+  --success: #6DBE8C;
+  --warning: #E0AE55;
   --sidebar: #171C25;
   --sidebar-foreground: #D5DCE5;
   --sidebar-primary: #2A367A;

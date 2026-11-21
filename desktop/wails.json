@@ -15,6 +15,13 @@
     "productName": "czlterm",
     "productVersion": "0.1.0",
     "copyright": "Copyright © 2026 CZL",
-    "comments": "Lightweight connection manager: SSH, RDP, VNC, SFTP, Vaultwarden, MCP"
+    "comments": "Lightweight connection manager: SSH, RDP, VNC, SFTP, Vaultwarden, MCP",
+    "protocols": [
+      {
+        "scheme": "czlterm",
+        "description": "czlterm link",
+        "role": "Viewer"
+      }
+    ]
   }
 }

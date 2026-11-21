@@ -1,8 +1,9 @@
 // Package conn 定义连接模型与本地 JSON 存储。
 //
-// 每个连接一个文件 (`data/connections/<id>.json`), 字段顺序固定、缩进输出:
-// 数据目录是 git 仓库, 一连接一文件让多设备同时改不同连接时不冲突, diff 也可读。
+// 每个连接一个文件 (`<空间目录>/connections/<id>.json`), 字段顺序固定、缩进输出。
+// 云同步以单条连接为一份文档。
 // 文件里不含任何凭据, 凭据只以 Vaultwarden 条目 ID 的形式引用。
+// 每个空间 (本机、个人云同步、团队) 一个目录, 目录结构相同, 见 internal/space。
 package conn
 
 import (
@@ -26,6 +27,8 @@ const (
 	AuthSystem = "system"
 	// AuthVault 从 Vaultwarden 条目取凭据: 登录条目取用户名与密码, SSH 密钥条目取私钥。
 	AuthVault = "vault"
+	// AuthStored 用本空间凭据库 (internal/cred) 里的一条凭据: 用户名、密码与私钥, 不需要 Vaultwarden。
+	AuthStored = "stored"
 )
 
 // Connection 是一条连接配置。
@@ -43,6 +46,8 @@ type Connection struct {
 	VaultItem string `json:"vaultItem"`
 	// KeyItem 是私钥所在的 Vaultwarden 条目 (SSH 密钥条目), 仅 SSH 使用; 与 VaultItem 可同时设置。
 	KeyItem string `json:"keyItem"`
+	// Credential 是 auth=stored 时引用的凭据 id, 凭据与连接在同一个空间。
+	Credential string `json:"credential"`
 	// Jump 是跳板机连接的 ID, 仅 SSH 使用。
 	Jump  string `json:"jump"`
 	Notes string `json:"notes"`
@@ -97,9 +102,17 @@ func (c *Connection) Normalize() error {
 	if c.Name == "" {
 		c.Name = c.Host
 	}
-	if c.Auth != AuthVault {
-		c.Auth = AuthSystem
+	switch c.Auth {
+	case AuthVault:
+		c.Credential = ""
+	case AuthStored:
 		c.VaultItem, c.KeyItem = "", ""
+		if !ValidID(c.Credential) {
+			return fmt.Errorf("2008 select a saved credential")
+		}
+	default:
+		c.Auth = AuthSystem
+		c.VaultItem, c.KeyItem, c.Credential = "", "", ""
 	}
 	if c.Protocol != ProtoSSH {
 		c.Jump, c.KeyItem = "", ""

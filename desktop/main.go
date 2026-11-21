@@ -14,7 +14,6 @@ import (
 
 	"github.com/woodchen-ink/czlterm/desktop/internal/askpass"
 	"github.com/woodchen-ink/czlterm/desktop/internal/autostart"
-	"github.com/woodchen-ink/czlterm/desktop/internal/gitsync"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
 	"github.com/woodchen-ink/czlterm/desktop/internal/mcpbridge"
 	"github.com/woodchen-ink/czlterm/desktop/internal/paths"
@@ -30,10 +29,6 @@ func main() {
 	// SSH 代理 helper 直接保留标准流, 不能初始化 GUI、日志或单实例锁。
 	if len(os.Args) > 1 && os.Args[1] == "ssh-proxy" {
 		os.Exit(launch.RunSSHProxy(os.Args[2:]))
-	}
-	// 被 git 当作 GIT_ASKPASS 调起, 回答同步仓库的用户名与令牌。见 internal/gitsync/auth.go。
-	if gitsync.AskpassActive() {
-		os.Exit(gitsync.RunAskpass(os.Args[1:]))
 	}
 	// 被 ssh 当作 SSH_ASKPASS 调起: ssh 以提示语为参数调用, 只能靠环境变量识别。见 internal/askpass。
 	if askpass.Active() {
@@ -70,6 +65,12 @@ func main() {
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: paths.InstanceID(),
 			OnSecondInstanceLaunch: func(d options.SecondInstanceData) {
+				// 协议链接 (登录回调、加入团队、结账回跳) 在 Windows 上由第二个进程带着命令行转来。
+				for _, arg := range d.Args {
+					if app.handleLink(arg) {
+						return
+					}
+				}
 				// 自启拉起时已有实例在运行, 保持原状不弹窗。
 				if !autostart.FromArgs(d.Args) {
 					app.showWindow()
@@ -92,6 +93,8 @@ func main() {
 		},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),
+			// macOS 不起第二个进程, 协议链接经系统 URL 事件直接送到本进程。
+			OnUrlOpen: func(u string) { app.handleLink(u) },
 		},
 	})
 	if err != nil {

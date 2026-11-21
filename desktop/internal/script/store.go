@@ -13,9 +13,7 @@ import (
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
 )
 
-// Store 读写 `<data>/scripts/*.json`。与连接存储一样不做内存缓存, 同步会在进程外改文件。
-//
-// 写入与 git 同步的互斥由调用方负责 (包在 conn.Store.Exclusive 里), 本类型只保证自身读写不交错。
+// Store 读写 `<空间目录>/scripts/*.json`。与连接存储一样不做内存缓存。
 type Store struct {
 	dir string
 	mu  sync.Mutex
@@ -79,25 +77,43 @@ func (s *Store) Save(sc Script) (Script, error) {
 	if err := sc.Normalize(); err != nil {
 		return sc, err
 	}
+	return sc, s.write(sc)
+}
+
+// Put 写入从别处来的脚本 (云同步拉取、空间之间搬移): 照常校验, 保留原 UpdatedAt。
+func (s *Store) Put(sc Script) error {
+	if !conn.ValidID(sc.ID) {
+		return fmt.Errorf("2114 invalid script id")
+	}
+	updated := sc.UpdatedAt
+	if err := sc.Normalize(); err != nil {
+		return err
+	}
+	if updated != "" {
+		sc.UpdatedAt = updated
+	}
+	return s.write(sc)
+}
+
+// write 落盘。先写临时文件再改名, 写到一半崩溃不会留下半截 JSON。
+func (s *Store) write(sc Script) error {
 	data, err := json.MarshalIndent(sc, "", "  ")
 	if err != nil {
-		return sc, fmt.Errorf("2115 encode script: %w", err)
+		return fmt.Errorf("2115 encode script: %w", err)
 	}
 	data = append(data, '\n')
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// 先写临时文件再改名, 写到一半崩溃不会留下半截 JSON。
 	path := s.path(sc.ID)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return sc, fmt.Errorf("2116 write script: %w", err)
+		return fmt.Errorf("2116 write script: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		os.Remove(tmp)
-		return sc, fmt.Errorf("2116 write script: %w", err)
+		return fmt.Errorf("2116 write script: %w", err)
 	}
-	return sc, nil
+	return nil
 }
 
 // Delete 删除脚本, 不存在时视为成功。

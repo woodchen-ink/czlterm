@@ -18,11 +18,11 @@ func (a *App) Connect(id string) (launch.Result, error) {
 	if err := a.ready(); err != nil {
 		return launch.Result{}, err
 	}
-	c, err := a.conns.Get(id)
+	c, sp, err := a.findConn(id)
 	if err != nil {
 		return launch.Result{}, err
 	}
-	hops, err := a.resolveChain(c)
+	hops, err := a.resolveChain(sp, c)
 	if err != nil {
 		return launch.Result{}, err
 	}

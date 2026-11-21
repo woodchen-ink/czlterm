@@ -4,22 +4,28 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/woodchen-ink/czlterm/desktop/internal/account"
 	"github.com/woodchen-ink/czlterm/desktop/internal/agent"
 	"github.com/woodchen-ink/czlterm/desktop/internal/askpass"
-	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
+	"github.com/woodchen-ink/czlterm/desktop/internal/billing"
+	"github.com/woodchen-ink/czlterm/desktop/internal/cloudsync"
+	"github.com/woodchen-ink/czlterm/desktop/internal/deeplink"
 	"github.com/woodchen-ink/czlterm/desktop/internal/facts"
 	"github.com/woodchen-ink/czlterm/desktop/internal/geo"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
+	"github.com/woodchen-ink/czlterm/desktop/internal/orgs"
 	"github.com/woodchen-ink/czlterm/desktop/internal/paths"
-	"github.com/woodchen-ink/czlterm/desktop/internal/script"
 	"github.com/woodchen-ink/czlterm/desktop/internal/secret"
 	"github.com/woodchen-ink/czlterm/desktop/internal/settings"
+	"github.com/woodchen-ink/czlterm/desktop/internal/space"
 	"github.com/woodchen-ink/czlterm/desktop/internal/sshx"
 	"github.com/woodchen-ink/czlterm/desktop/internal/vault"
 )
@@ -28,7 +34,6 @@ import (
 const (
 	eventVaultLocked   = "vault:locked"
 	eventVaultUnlocked = "vault:unlocked"
-	eventSyncStatus    = "sync:status"
 	eventEditStatus    = "edit:status"
 	eventFacts         = "facts:updated"
 	eventGeo           = "geo:updated"
@@ -43,8 +48,8 @@ type App struct {
 	ctx context.Context
 	log *slog.Logger
 
-	conns    *conn.Store
-	scripts  *script.Store
+	// spaces 是本地数据按空间 (本机 / 个人云同步 / 团队) 的划分, 见 internal/space。
+	spaces   *space.Registry
 	facts    *facts.Store
 	geo      *geo.Store
 	settings *settings.Store
@@ -54,11 +59,18 @@ type App struct {
 	pool     *sshx.Pool
 	dataDir  string
 
+	// CZL Connect: 登录、云同步 (端到端加密)、团队、订阅。都是可选的, 不登录时本机功能照常。
+	account      *account.Manager
+	cloud        *cloudsync.Service
+	orgs         *orgs.Client
+	billing      *billing.Client
+	billingCache billingCache
+	accountState accountState
+
 	mcp      mcpState
 	terminal terminalState
 	vnc      vncState
 	edits    editState
-	sync     syncState
 	updates  updateState
 
 	// initErr 是启动阶段的致命错误 (数据目录不可用), 界面据此显示错误页而不是空列表。
@@ -100,6 +112,20 @@ func (a *App) startup(ctx context.Context) {
 	if cfg.VaultRemember {
 		go a.restoreVault()
 	}
+	// git 同步已移除, 清掉旧版存在钥匙串里的仓库令牌或私钥。
+	if v, _ := secret.Get(secret.LegacyGitKey); v != "" {
+		_ = secret.Set(secret.LegacyGitKey, "")
+	}
+	if err := registerProtocol(deeplink.SchemeName); err != nil {
+		a.log.Warn("register protocol", "err", err)
+	}
+	// 冷启动时由协议链接拉起 (Windows 把链接放在命令行上): 加入团队的邀请码先记下, 前端就绪后取。
+	for _, arg := range os.Args[1:] {
+		if l, ok := deeplink.Parse(arg); ok && l.Kind == deeplink.KindTeamJoin {
+			a.accountState.pendingJoin.Store(l.Code)
+		}
+	}
+	go func() { _, _ = a.AccountStatus() }()
 	go a.runUpdateChecks(ctx)
 	a.startTray()
 	a.log.Info("startup done", "version", version, "os", runtime.GOOS)
@@ -125,16 +151,17 @@ func (a *App) init() error {
 	if a.dataDir, err = paths.Data(); err != nil {
 		return err
 	}
-	if a.conns, err = conn.Open(a.dataDir); err != nil {
-		return err
-	}
-	if a.scripts, err = script.Open(a.dataDir); err != nil {
+	if a.spaces, err = space.Open(a.dataDir); err != nil {
 		return err
 	}
 	cacheDir, err := paths.Sub("cache")
 	if err != nil {
 		return err
 	}
+	a.account = account.NewManager(account.DefaultConfig, filepath.Join(cfgDir, "account.dat"))
+	a.account.OnExpired(a.onAuthExpired)
+	a.orgs = orgs.New("", a.account, nil)
+	a.billing = billing.New("", a.account, nil)
 	if a.facts, err = facts.Open(a.dataDir, cacheDir); err != nil {
 		return err
 	}
@@ -144,6 +171,8 @@ func (a *App) init() error {
 	if a.askpass, err = askpass.Start(); err != nil {
 		return err
 	}
+	// 放在最后: ready() 以 cloud 是否组装好判断启动完成
+	a.newCloud(cfgDir, cacheDir)
 	return nil
 }
 
@@ -152,6 +181,9 @@ func (a *App) shutdown(context.Context) {
 	a.quitting.Store(true)
 	a.stopTray()
 	a.stopMCP()
+	if a.cloud != nil {
+		a.cloud.Stop(false)
+	}
 	a.stopTerminals()
 	a.edits.stopAll()
 	a.pool.CloseAll()
@@ -184,7 +216,8 @@ func (a *App) ready() error {
 	if a.initErr != nil {
 		return a.initErr
 	}
-	if a.conns == nil {
+	// cloud 是 init 里最后组装的, 它在就说明登录、空间、团队、收款都已就绪
+	if a.spaces == nil || a.cloud == nil {
 		return errors.New("1010 app is still starting")
 	}
 	return nil

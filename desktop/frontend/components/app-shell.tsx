@@ -7,6 +7,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpCircleIcon, PlusIcon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { CloudProvider, useCloud } from "@/components/cloud/cloud-provider";
+import { ConfirmCancelled, ConfirmConnectionProvider, useConfirmGate } from "@/components/cloud/confirm-connection";
+import { SpaceSwitcher } from "@/components/cloud/space-switcher";
 import { ConnectionDetail, type DetailTab } from "@/components/connection-detail";
 import { ConnectionForm } from "@/components/connection-form";
 import { ConnectionList, type ConnectionActions } from "@/components/connection-list";
@@ -41,7 +44,6 @@ import {
   type Protocol,
   type Script,
   type ScriptList,
-  type SyncStatus,
   type TerminalInfo,
   type UpdateInfo,
 } from "@/lib/api";
@@ -51,7 +53,11 @@ import { cn } from "@/lib/utils";
 export function AppShell() {
   return (
     <VaultProvider>
-      <Shell />
+      <CloudProvider>
+        <ConfirmConnectionProvider>
+          <Shell />
+        </ConfirmConnectionProvider>
+      </CloudProvider>
     </VaultProvider>
   );
 }
@@ -59,6 +65,10 @@ export function AppShell() {
 function Shell() {
   useLanguage();
   const { withVault, status: vaultStatus } = useVault();
+  const { current } = useCloud();
+  // 连接前可能要先解锁保险库, 团队连接可能要先确认 (6416); 两层都包上
+  const confirmGate = useConfirmGate();
+  const guarded = useCallback(<T,>(fn: () => Promise<T>) => confirmGate(() => withVault(fn)), [confirmGate, withVault]);
   const [list, setList] = useState<List | null>(null);
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
@@ -74,14 +84,8 @@ function Shell() {
   const [scriptsOpen, setScriptsOpen] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [removing, setRemoving] = useState<ConnectionView | null>(null);
-  const [sync, setSync] = useState<SyncStatus | null>(null);
-  const [syncEnabled, setSyncEnabled] = useState(false);
   // 坏文件告警只在内容变化时提示一次, 不随每次刷新重复弹出。
   const lastWarnings = useRef("");
-  // 手动同步自己弹结果, 同步状态事件里不再重复提示。
-  const manualSync = useRef(false);
-  // 保存同步设置后安排的那次同步, 成功时也要告诉用户。
-  const announceSync = useRef(false);
 
   const reload = useCallback(async () => {
     try {
@@ -104,32 +108,21 @@ function Shell() {
     }
   }, []);
 
-  const loadSettings = useCallback(() => {
-    api
-      .GetSettings()
-      .then((v) => setSyncEnabled(!!v.settings.gitRemote))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     queueMicrotask(() => {
       void reload();
       void reloadScripts();
-      loadSettings();
     });
-    api.GetSyncStatus().then(setSync).catch(() => {});
-    const offSync = onEvent<SyncStatus>(Events.syncStatus, (s) => {
-      setSync(s);
-      if (s.running) return;
-      // 同步可能拉来了别的设备上的改动。
+    // 切换空间: 列表整体换掉, 选中项清空; 云同步拉到别处的修改: 原地刷新。
+    const offSpace = onEvent(Events.spaceChanged, () => {
+      setSelectedId("");
+      setQuery("");
       void reload();
       void reloadScripts();
-      if (!manualSync.current) {
-        // 后台同步 (自动同步、保存设置后) 失败一律提示, 不能只藏在按钮的悬停说明里。
-        if (s.error) toast.error(t("同步失败: {0}", errorText(s.error)));
-        else if (announceSync.current) toast.success(t("仓库同步完成"));
-      }
-      announceSync.current = false;
+    });
+    const offCloud = onEvent(Events.cloudChanged, () => {
+      void reload();
+      void reloadScripts();
     });
     api
       .GetPendingUpdate()
@@ -143,12 +136,22 @@ function Shell() {
     // 后台查到服务器所在国家后重新拉列表显示国旗。
     const offGeo = onEvent(Events.geoUpdated, () => void reload());
     return () => {
-      offSync();
+      offSpace();
+      offCloud();
       offEdit();
       offUpdate();
       offGeo();
     };
-  }, [reload, reloadScripts, loadSettings]);
+  }, [reload, reloadScripts]);
+
+  // 生效的当前空间变了 (启动后云同步就绪、换账号、空间被清掉回落到本机): 列表跟着换。
+  useEffect(() => {
+    queueMicrotask(() => {
+      setSelectedId("");
+      void reload();
+      void reloadScripts();
+    });
+  }, [current.key, reload, reloadScripts]);
 
   // 保险库状态变化后条目名称 (列表里的派生字段) 随之出现或消失。
   useEffect(() => {
@@ -165,15 +168,15 @@ function Shell() {
     async (tab: TerminalTab): Promise<TerminalInfo | null> => {
       try {
         const id = tab.scriptId
-          ? await withVault(() => api.RunScript(tab.connId, tab.scriptId))
-          : (await withVault(() => api.Connect(tab.connId))).terminalId;
+          ? await guarded(() => api.RunScript(tab.connId, tab.scriptId))
+          : (await guarded(() => api.Connect(tab.connId))).terminalId;
         return id ? await terminalInfo(id) : null;
       } catch (e) {
-        if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
+        if (!(e instanceof UnlockCancelled) && !(e instanceof ConfirmCancelled)) toast.error(errorText(e));
         return null;
       }
     },
-    [withVault],
+    [guarded],
   );
   const terms = useTerminalTabs(relaunch);
   const openTerminal = terms.open;
@@ -183,17 +186,17 @@ function Shell() {
   const runScript = useCallback(
     async (c: ConnectionView, s: Script) => {
       try {
-        const id = await withVault(() => api.RunScript(c.id, s.id));
+        const id = await guarded(() => api.RunScript(c.id, s.id));
         const info = id ? await terminalInfo(id) : null;
         if (info) {
           openTerminal(info);
           setScriptsOpen(false);
         } else if (!id) toast.success(t("正在 {0} 上运行 {1}", c.name, s.name));
       } catch (e) {
-        if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
+        if (!(e instanceof UnlockCancelled) && !(e instanceof ConfirmCancelled)) toast.error(errorText(e));
       }
     },
-    [withVault, openTerminal],
+    [guarded, openTerminal],
   );
 
   const showDetail = terms.setView;
@@ -201,7 +204,7 @@ function Shell() {
     () => ({
       connect: async (c) => {
         try {
-          const r = await withVault(() => api.Connect(c.id));
+          const r = await guarded(() => api.Connect(c.id));
           if (r.vncId) {
             openVNC({ id: r.vncId, connId: c.id, title: c.name });
             return;
@@ -213,7 +216,7 @@ function Shell() {
           else if (r.passwordCopied) toast.success(t("正在打开 {0}, 密码已复制到剪贴板, {1} 秒后清除", c.name, r.clipboardSeconds));
           else toast.success(t("正在打开 {0}", c.name));
         } catch (e) {
-          if (!(e instanceof UnlockCancelled)) toast.error(errorText(e));
+          if (!(e instanceof UnlockCancelled) && !(e instanceof ConfirmCancelled)) toast.error(errorText(e));
         }
       },
       openFiles: (c) => {
@@ -236,10 +239,18 @@ function Shell() {
         }
       },
       remove: (c) => setRemoving(c),
+      copyTo: async (c, key, label) => {
+        try {
+          await api.CopyConnectionTo(c.id, key);
+          toast.success(t("已复制到「{0}」", label));
+        } catch (e) {
+          toast.error(errorText(e));
+        }
+      },
       runScript,
       manageScripts: () => setScriptsOpen(true),
     }),
-    [withVault, reload, runScript, openTerminal, openVNC, showDetail],
+    [guarded, reload, runScript, openTerminal, openVNC, showDetail],
   );
 
   function create(protocol: Protocol) {
@@ -249,6 +260,8 @@ function Shell() {
     setFormKey((k) => k + 1);
     setFormOpen(true);
   }
+
+  const readOnly = !!list?.readOnly || current.readOnly;
 
   function openSettings(tab: SettingsTab) {
     setSettingsTab(tab);
@@ -270,43 +283,20 @@ function Shell() {
     <SettingsPage
       initialTab={settingsTab}
       onClose={() => setSettingsOpen(false)}
-      onSaved={(syncing) => {
-        announceSync.current = syncing;
-        loadSettings();
-        void reload();
-      }}
+      onSaved={() => void reload()}
     />
   ) : null;
-
-  /** 侧栏同步按钮: 连接配置走 git, 保险库已解锁时顺带从服务器同步条目 (bw sync)。 */
-  async function syncNow() {
-    const vaultOpen = vaultStatus?.status === "unlocked";
-    manualSync.current = true;
-    const [git, vault] = await Promise.allSettled([api.SyncNow(), vaultOpen ? api.VaultRefresh() : Promise.resolve()]);
-    // 同步结束的事件可能晚于返回值到达, 稍等再清标记, 避免同一次结果提示两遍。
-    setTimeout(() => (manualSync.current = false), 500);
-    if (git.status === "rejected") toast.error(errorText(git.reason));
-    if (vault.status === "rejected") toast.error(t("保险库同步失败: {0}", errorText(vault.reason)));
-    if (git.status === "fulfilled" && vault.status === "fulfilled") {
-      const what = syncEnabled ? t("连接配置已同步") : t("连接配置已提交到本地仓库");
-      toast.success(vaultOpen ? t("{0}, 保险库条目已更新", what) : what);
-    }
-    if (vaultOpen) void reload();
-  }
 
   return (
     <>
       {page}
       <div className={cn("flex h-full", page && "hidden")}>
         <aside className="bg-sidebar text-sidebar-foreground flex w-72 shrink-0 flex-col border-r">
-          <div className="flex shrink-0 items-center gap-1 p-2">
-            <div className="relative min-w-0 flex-1">
-              <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-              <Input className="h-7 pl-7 text-sm" placeholder={t("搜索")} value={query} onChange={(e) => setQuery(e.target.value)} />
-            </div>
+          <div className="flex shrink-0 items-center gap-1 px-1.5 pt-1.5">
+            <SpaceSwitcher onManage={openSettings} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={t("新建连接")}>
+                <Button variant="ghost" size="icon-sm" aria-label={t("新建连接")} disabled={readOnly} title={readOnly ? t("这个空间只读") : undefined}>
                   <PlusIcon />
                 </Button>
               </DropdownMenuTrigger>
@@ -317,12 +307,17 @@ function Shell() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          <div className="relative shrink-0 px-2 py-1.5">
+            <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-3.5 -translate-y-1/2" />
+            <Input className="h-7 pl-7 text-sm" placeholder={t("搜索")} value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
           <div className="czl-scroll min-h-0 flex-1 overflow-y-auto">
             {loadError ? (
               <p className="text-destructive px-4 py-6 text-sm">{errorText(loadError)}</p>
             ) : (
               <ConnectionList
                 items={items}
+                readOnly={readOnly}
                 query={query}
                 scripts={scriptItems}
                 selectedId={selectedId}
@@ -345,13 +340,7 @@ function Shell() {
               <span className="truncate">{t("新版本 {0} 可用, 点击更新", update.release.version)}</span>
             </button>
           )}
-          <StatusBar
-            sync={sync}
-            syncEnabled={syncEnabled}
-            onSync={syncNow}
-            onScripts={() => setScriptsOpen(true)}
-            onSettings={() => openSettings("general")}
-          />
+          <StatusBar onScripts={() => setScriptsOpen(true)} onSettings={() => openSettings("general")} onAccount={openSettings} />
         </aside>
 
         <main className="bg-background flex min-w-0 flex-1 flex-col">

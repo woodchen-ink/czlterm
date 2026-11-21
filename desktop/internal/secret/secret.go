@@ -1,4 +1,4 @@
-// Package secret 把本机凭据 (git 同步密钥) 存进系统密钥库: macOS Keychain、Windows 凭据管理器。
+// Package secret 把本机凭据存进系统密钥库: macOS Keychain、Windows 凭据管理器。
 // 不写进 settings.json: 设置文件可能被用户拷来拷去, 凭据不该跟着走。
 package secret
 
@@ -12,8 +12,8 @@ import (
 	"github.com/woodchen-ink/czlterm/desktop/internal/paths"
 )
 
-// GitKey 是 git 同步密钥的条目名。
-const GitKey = "git-secret"
+// LegacyGitKey 是已移除的 git 同步保存访问令牌 / 私钥的条目名, 启动时清掉残留。
+const LegacyGitKey = "git-secret"
 
 // VaultSessionKey 是「记住解锁」保存的 bw 会话密钥。
 const VaultSessionKey = "bw-session"

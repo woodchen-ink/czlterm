@@ -12,6 +12,7 @@ import (
 	"github.com/woodchen-ink/czlterm/desktop/internal/askpass"
 	"github.com/woodchen-ink/czlterm/desktop/internal/conn"
 	"github.com/woodchen-ink/czlterm/desktop/internal/launch"
+	"github.com/woodchen-ink/czlterm/desktop/internal/space"
 	"github.com/woodchen-ink/czlterm/desktop/internal/sshx"
 )
 
@@ -26,7 +27,10 @@ type hop struct {
 
 // resolveChain 返回从最外层跳板机到目标机的各跳, 并从保险库取出每一跳的凭据。
 // 任何一跳用保险库凭据而保险库未解锁时返回 vault.ErrLocked, 界面据此弹出解锁框后重试。
-func (a *App) resolveChain(target conn.Connection) ([]hop, error) {
+//
+// owner 是 target 所在的空间, 跳板机与保存的凭据都只在这个空间里找。团队空间里带凭据、
+// 内容又不是本人确认过的连接 (别人新建或改过主机、凭据引用) 返回 6416, 界面确认后用 ConfirmConnection 放行。
+func (a *App) resolveChain(owner *space.Space, target conn.Connection) ([]hop, error) {
 	var chain []conn.Connection
 	cur := target
 	for {
@@ -37,7 +41,8 @@ func (a *App) resolveChain(target conn.Connection) ([]hop, error) {
 		if len(chain) > conn.MaxJumpDepth {
 			return nil, fmt.Errorf("2019 jump chain longer than %d", conn.MaxJumpDepth)
 		}
-		next, err := a.conns.Get(cur.Jump)
+		// 跳板机只在目标所在的空间里找: 团队空间的连接不会借用本机空间的同 id 连接。
+		next, err := owner.Conns.Get(cur.Jump)
 		if err != nil {
 			return nil, fmt.Errorf("2021 jump host of %q not found", cur.Name)
 		}
@@ -47,9 +52,25 @@ func (a *App) resolveChain(target conn.Connection) ([]hop, error) {
 		cur = next
 	}
 
+	for _, c := range chain {
+		if owner.NeedsConfirm(c) {
+			return nil, untrustedError(c.ID)
+		}
+	}
+
 	hops := make([]hop, 0, len(chain))
 	for _, c := range chain {
 		h := hop{conn: c, user: c.Username}
+		if c.Auth == conn.AuthStored {
+			cr, err := owner.Creds.Get(c.Credential)
+			if err != nil {
+				return nil, err
+			}
+			h.password, h.privateKey, h.passphrase = cr.Password, cr.PrivateKey, cr.Passphrase
+			if h.user == "" {
+				h.user = cr.Username
+			}
+		}
 		if c.Auth == conn.AuthVault {
 			if c.VaultItem != "" {
 				s, err := a.vault.Secret(c.VaultItem)
@@ -86,12 +107,19 @@ func (a *App) resolveChain(target conn.Connection) ([]hop, error) {
 	return hops, nil
 }
 
+// untrustedError 是「团队连接需要本人确认」的错误, 带上连接 id 供界面弹确认框。
+func untrustedError(id string) error {
+	return fmt.Errorf("6416 untrusted_connection:%s", id)
+}
+
 // sshHops 把解析结果转成进程内 SSH 客户端用的链路。
+//
+// 保险库与保存的凭据都标 Vault: 指定了凭据就只用它, 不回退系统 agent 与默认私钥。
 func sshHops(hops []hop) ([]sshx.Hop, error) {
 	out := make([]sshx.Hop, 0, len(hops))
 	for _, h := range hops {
 		sh := sshx.Hop{Host: h.conn.Host, Port: h.conn.Port, User: h.user, Password: h.password,
-			Vault: h.conn.Auth == conn.AuthVault}
+			Vault: h.conn.Auth != conn.AuthSystem}
 		if h.privateKey != "" {
 			raw, err := agent.ParseKey(h.privateKey, h.passphrase)
 			if err != nil {
@@ -113,7 +141,7 @@ func (a *App) terminalHops(hops []hop, exe string) ([]launch.SSHHop, error) {
 	out := make([]launch.SSHHop, 0, len(hops))
 	for _, h := range hops {
 		lh := launch.SSHHop{Host: bracketless(h.conn.Host), Port: h.conn.Port, User: h.user,
-			Vault: h.conn.Auth == conn.AuthVault, Password: h.password != "", Env: launch.SSHPasswordEnv()}
+			Vault: h.conn.Auth != conn.AuthSystem, Password: h.password != "", Env: launch.SSHPasswordEnv()}
 		if h.privateKey != "" {
 			sock, err := a.agents.Serve(h.conn.ID, []agent.Key{{PrivateKey: h.privateKey,
 				Passphrase: h.passphrase, Comment: "czlterm:" + h.conn.Name}})

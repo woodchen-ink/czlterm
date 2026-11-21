@@ -20,14 +20,14 @@ func (a *App) sftpFor(ctx context.Context, id string) (*sftp.Client, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
 	}
-	c, err := a.conns.Get(id)
+	c, sp, err := a.findConn(id)
 	if err != nil {
 		return nil, err
 	}
 	if c.Protocol != conn.ProtoSSH {
 		return nil, errors.New("5120 file manager is only available for ssh connections")
 	}
-	hops, err := a.resolveChain(c)
+	hops, err := a.resolveChain(sp, c)
 	if err != nil {
 		return nil, err
 	}

@@ -65,9 +65,8 @@ type mcpListConnectionsOut struct {
 }
 
 func (a *App) mcpListConnections(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, mcpListConnectionsOut, error) {
-	list, _ := a.conns.List()
 	out := mcpListConnectionsOut{Connections: []mcpConnSummary{}}
-	for _, c := range list {
+	for _, c := range a.allConnections() {
 		out.Connections = append(out.Connections, mcpConnSummary{ID: c.ID, Name: c.Name, Group: c.Group, Protocol: c.Protocol,
 			Host: c.Host, Port: c.Port, Username: c.Username})
 	}
@@ -216,7 +215,7 @@ func (a *App) mcpRunCommand(ctx context.Context, _ *mcp.CallToolRequest, in mcpR
 
 // mcpTarget 定位连接并检查 AI 访问权限, 返回解析好凭据的链路。
 func (a *App) mcpTarget(name string) (conn.Connection, []sshx.Hop, error) {
-	c, err := a.conns.FindByName(name)
+	c, sp, err := a.findConnectionByName(name)
 	if err != nil {
 		return c, nil, err
 	}
@@ -226,9 +225,12 @@ func (a *App) mcpTarget(name string) (conn.Connection, []sshx.Hop, error) {
 	if !a.settings.Get().MCPAllowAccess {
 		return c, nil, errors.New("server access is off: the user must turn on 'Allow AI to access servers' (允许 AI 访问服务器) in czlterm → Settings → MCP")
 	}
-	hops, err := a.resolveChain(c)
+	hops, err := a.resolveChain(sp, c)
 	if errors.Is(err, vault.ErrLocked) {
 		return c, nil, errors.New("the vault is locked: ask the user to unlock it in czlterm, then retry")
+	}
+	if err != nil && strings.HasPrefix(err.Error(), "6416 ") {
+		return c, nil, errors.New("this team connection's host or credentials were set by a teammate and the user has not confirmed them yet: ask the user to open it once in czlterm and confirm, then retry")
 	}
 	if err != nil {
 		return c, nil, err

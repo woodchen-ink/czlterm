@@ -31,5 +31,23 @@
         <!-- 用 osascript 调起 iTerm2 时系统会弹自动化授权框, 这里给出用途说明。 -->
         <key>NSAppleEventsUsageDescription</key>
         <string>czlterm 需要控制终端程序来打开 SSH 会话。</string>
+        <!-- czlterm:// 协议: CZL Connect 登录回调、加入团队、结账回跳, 由 wails.json 的 info.protocols 生成。 -->
+        {{if .Info.Protocols}}
+        <key>CFBundleURLTypes</key>
+        <array>
+          {{range .Info.Protocols}}
+            <dict>
+                <key>CFBundleURLName</key>
+                <string>net.czl.term.{{.Scheme}}</string>
+                <key>CFBundleURLSchemes</key>
+                <array>
+                    <string>{{.Scheme}}</string>
+                </array>
+                <key>CFBundleTypeRole</key>
+                <string>{{.Role}}</string>
+            </dict>
+          {{end}}
+        </array>
+        {{end}}
     </dict>
 </plist>

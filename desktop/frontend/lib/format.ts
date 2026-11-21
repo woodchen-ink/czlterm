@@ -47,3 +47,30 @@ export function formatDuration(sec: number): string {
   if (h > 0) return t("{0} 小时 {1} 分", h, m);
   return t("{0} 分", m);
 }
+
+/** 金额 (分) 按币种显示: 人民币 ¥34, 美元 $9.99, 其它带币种代码。 */
+export function formatMoney(cents: number, currency: string): string {
+  const v = cents / 100;
+  const s = Number.isInteger(v) ? String(v) : v.toFixed(2);
+  const c = (currency || "CNY").toUpperCase();
+  if (c === "CNY") return `¥${s}`;
+  if (c === "USD") return `$${s}`;
+  return `${s} ${c}`;
+}
+
+/** 距今多久 (刚刚 / N 分钟前 / N 小时前 / 日期)。 */
+export function formatAgo(iso: string): string {
+  if (!iso) return "";
+  const sec = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (Number.isNaN(sec)) return iso;
+  if (sec < 60) return t("刚刚");
+  if (sec < 3600) return t("{0} 分钟前", Math.floor(sec / 60));
+  if (sec < 86400) return t("{0} 小时前", Math.floor(sec / 3600));
+  return formatTime(iso);
+}
+
+/** Go time.Time 经绑定是 RFC3339 字符串, 零值是 0001 年; 转成日期或空串。 */
+export function formatDate(v: unknown): string {
+  if (typeof v !== "string" || !v || v.startsWith("0001-")) return "";
+  return formatTime(v).slice(0, 10);
+}

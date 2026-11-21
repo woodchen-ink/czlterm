@@ -24,14 +24,14 @@ func (a *App) RefreshFacts(id string) (facts.Facts, error) {
 	if err := a.ready(); err != nil {
 		return facts.Facts{}, err
 	}
-	c, err := a.conns.Get(id)
+	c, sp, err := a.findConn(id)
 	if err != nil {
 		return facts.Facts{}, err
 	}
 	if c.Protocol != conn.ProtoSSH {
 		return facts.Facts{}, errors.New("5204 system info is only available for ssh connections")
 	}
-	hops, err := a.resolveChain(c)
+	hops, err := a.resolveChain(sp, c)
 	if err != nil {
 		return facts.Facts{}, err
 	}
@@ -54,12 +54,8 @@ func (a *App) collectFacts(id string, hops []hop) (facts.Facts, error) {
 	if err != nil {
 		return f, err
 	}
-	changed, err := a.facts.Save(id, f)
-	if err != nil {
+	if _, err := a.facts.Save(id, f); err != nil {
 		return f, err
-	}
-	if changed {
-		a.scheduleAutoSync()
 	}
 	wruntime.EventsEmit(a.ctx, eventFacts, id)
 	return f, nil

@@ -3,9 +3,10 @@
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/components/language-provider";
 
-import { useState } from "react";
-import { Loader2Icon } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { KeyRoundIcon, Loader2Icon, PencilIcon, PlusIcon } from "lucide-react";
 
+import { CredentialDialog } from "@/components/credential-dialog";
 import { VaultItemPicker } from "@/components/vault-item-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,12 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, defaultPort, type Connection, type ConnectionView, type Protocol } from "@/lib/api";
+import { api, defaultPort, type Connection, type ConnectionView, type CredentialList, type Protocol } from "@/lib/api";
 import { errorText } from "@/lib/errors";
 
 const NO_JUMP = "__none";
 
-/** 新建或编辑连接。凭据只引用 Vaultwarden 条目, 表单里不出现明文密码。 */
+/** 新建或编辑连接。凭据只引用 Vaultwarden 条目或保存的凭据, 表单里不出现明文密码。 */
 export function ConnectionForm({
   open,
   initial,
@@ -43,6 +44,21 @@ export function ConnectionForm({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [creds, setCreds] = useState<CredentialList | null>(null);
+  // 凭据弹窗: "new" 新建, "edit" 修改当前选中的
+  const [credDialog, setCredDialog] = useState<"" | "new" | "edit">("");
+
+  const loadCreds = useCallback(
+    () =>
+      api.ListCredentials().then(
+        (l) => setCreds(l),
+        () => setCreds(null),
+      ),
+    [],
+  );
+  useEffect(() => {
+    if (open) queueMicrotask(loadCreds);
+  }, [open, loadCreds]);
 
   if (!form) return null;
   const proto = form.protocol as Protocol;
@@ -125,9 +141,50 @@ export function ConnectionForm({
               <SelectContent>
                 <SelectItem value="system">{proto === "ssh" ? t("系统默认 (~/.ssh、系统 agent)") : t("不提供, 手动输入")}</SelectItem>
                 <SelectItem value="vault">{t("Vaultwarden 条目")}</SelectItem>
+                <SelectItem value="stored">{t("保存的凭据 (无需 Vaultwarden)")}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
+
+          {form.auth === "stored" && (
+            <div className="bg-secondary/50 space-y-2 rounded-md p-3">
+              <div className="flex gap-2">
+                <Select
+                  value={form.credential ?? ""}
+                  // Radix 的隐藏原生 select 在选项还没加载到时会回报空值, 不能拿它覆盖已选的凭据
+                  onValueChange={(v) => v && set("credential", v)}
+                >
+                  <SelectTrigger className="min-w-0 flex-1">
+                    <SelectValue placeholder={creds?.items.length ? t("选择一条凭据") : t("还没有保存的凭据")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {creds?.items.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <KeyRoundIcon className="text-muted-foreground" />
+                        <span className="truncate">{c.name}</span>
+                        <span className="text-muted-foreground text-xs">
+                          {[c.username, c.hasPassword ? t("密码") : "", c.hasKey ? t("私钥") : ""].filter(Boolean).join(" · ")}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.credential && (
+                  <Button type="button" variant="outline" size="icon" aria-label={t("编辑凭据")} onClick={() => setCredDialog("edit")}>
+                    <PencilIcon />
+                  </Button>
+                )}
+                <Button type="button" variant="outline" onClick={() => setCredDialog("new")}>
+                  <PlusIcon /> {t("新建")}
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                {creds?.shared
+                  ? t("团队空间里的凭据, 团队成员都能使用。")
+                  : t("凭据加密保存在本机; 开启云同步后随空间端到端加密同步。")}
+              </p>
+            </div>
+          )}
 
           {form.auth === "vault" && (
             <div className="bg-secondary/50 space-y-3 rounded-md p-3">
@@ -183,6 +240,19 @@ export function ConnectionForm({
           </Field>
           {error && <p className="text-destructive text-sm">{errorText(error)}</p>}
         </form>
+        {credDialog && (
+          <CredentialDialog
+            open
+            initial={credDialog === "edit" ? (creds?.items.find((c) => c.id === form.credential) ?? null) : null}
+            shared={!!creds?.shared}
+            onOpenChange={(o) => !o && setCredDialog("")}
+            onSaved={(s) => {
+              setCredDialog("");
+              // 列表里有了新凭据再选中它
+              void loadCreds().then(() => set("credential", s.id));
+            }}
+          />
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("取消")}

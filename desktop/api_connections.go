@@ -26,24 +26,28 @@ type ConnectionView struct {
 	Country     string `json:"country"`
 }
 
-// ConnectionList 是连接列表。Warnings 报告读不出来的连接文件, 不让一个坏文件挡住整个列表。
+// ConnectionList 是当前空间的连接列表。Warnings 报告读不出来的连接文件, 不让一个坏文件挡住整个列表。
 type ConnectionList struct {
+	// Space 是列表所属的空间标识; ReadOnly 为 true 时界面禁用新建、编辑与删除。
+	Space    string           `json:"space"`
+	ReadOnly bool             `json:"readOnly"`
 	Items    []ConnectionView `json:"items"`
 	Groups   []string         `json:"groups"`
 	Warnings []string         `json:"warnings"`
 }
 
-// ListConnections 返回全部连接, 按分组、名称排序。
+// ListConnections 返回当前空间的全部连接, 按分组、名称排序。
 func (a *App) ListConnections() (ConnectionList, error) {
 	if err := a.ready(); err != nil {
 		return ConnectionList{}, err
 	}
-	list, errs := a.conns.List()
+	sp := a.currentSpace()
+	list, errs := sp.Conns.List()
 	names := make(map[string]string, len(list))
 	for _, c := range list {
 		names[c.ID] = c.Name
 	}
-	out := ConnectionList{Items: make([]ConnectionView, 0, len(list)), Groups: []string{}, Warnings: []string{}}
+	out := ConnectionList{Space: sp.Key, ReadOnly: sp.ReadOnly(), Items: make([]ConnectionView, 0, len(list)), Groups: []string{}, Warnings: []string{}}
 	seen := map[string]bool{}
 	geoOn := a.settings.Get().GeoLookup
 	hosts := make([]string, 0, len(list))
@@ -71,8 +75,8 @@ func (a *App) ListConnections() (ConnectionList, error) {
 		out.Warnings = append(out.Warnings, e.Error())
 	}
 	if geoOn {
-		// 有坏文件时列表不完整, 不据此清理缓存。
-		if len(errs) == 0 {
+		// 有坏文件时列表不完整, 只看一个空间时也不全, 都不据此清理缓存。
+		if len(errs) == 0 && len(a.spaces.All()) == 1 {
 			a.geo.Prune(hosts)
 		}
 		go a.refreshGeo(hosts)
@@ -101,18 +105,23 @@ func (a *App) itemName(id string) string {
 	return ""
 }
 
-// SaveConnection 新建或更新连接, 返回保存后的连接。
+// SaveConnection 新建或更新连接, 返回保存后的连接。已有连接存回它所在的空间, 新建的进当前空间。
 func (a *App) SaveConnection(c conn.Connection) (conn.Connection, error) {
 	if err := a.ready(); err != nil {
 		return c, err
 	}
-	saved, err := a.conns.Save(c)
+	sp := a.currentSpace()
+	if c.ID != "" {
+		if _, owner, err := a.findConn(c.ID); err == nil {
+			sp = owner
+		}
+	}
+	saved, err := sp.SaveConnection(c)
 	if err != nil {
 		return saved, err
 	}
 	// 连接配置变了, 已建立的进程内连接可能指向旧主机或旧凭据。
 	a.pool.Drop(saved.ID)
-	a.scheduleAutoSync()
 	return saved, nil
 }
 
@@ -121,7 +130,7 @@ func (a *App) DuplicateConnection(id string) (conn.Connection, error) {
 	if err := a.ready(); err != nil {
 		return conn.Connection{}, err
 	}
-	c, err := a.conns.Get(id)
+	c, _, err := a.findConn(id)
 	if err != nil {
 		return c, err
 	}
@@ -135,11 +144,14 @@ func (a *App) DeleteConnection(id string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	if err := a.conns.Delete(id); err != nil {
+	_, sp, err := a.findConn(id)
+	if err != nil {
+		return err
+	}
+	if err := sp.DeleteConnection(id); err != nil {
 		return err
 	}
 	a.pool.Drop(id)
 	a.facts.Delete(id)
-	a.scheduleAutoSync()
 	return nil
 }

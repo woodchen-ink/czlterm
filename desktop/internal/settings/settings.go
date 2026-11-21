@@ -45,12 +45,8 @@ type Settings struct {
 	// 手动锁定或空闲超时锁定时删除。
 	VaultRemember bool `json:"vaultRemember"`
 
-	// GitRemote 是同步用的私有仓库地址, 为空时只做本地提交。
-	GitRemote string `json:"gitRemote"`
-	// GitUsername 是 HTTPS 仓库的用户名, 可选; 对应的令牌 / SSH 私钥存在系统密钥库 (internal/secret)。
-	GitUsername string `json:"gitUsername"`
-	// GitAutoSync 为 true 时每次修改连接后自动同步。
-	GitAutoSync bool `json:"gitAutoSync"`
+	// Space 是当前空间 (internal/space 的标识), 空或已不可见时为本机空间。
+	Space string `json:"space"`
 
 	// GeoLookup 为 true 时把服务器 IP 发给 ip.czl.net 查所在国家, 列表显示国旗; 默认关闭。
 	GeoLookup bool `json:"geoLookup"`
@@ -132,8 +128,6 @@ func (s *Store) Update(fn func(*Settings)) (Settings, error) {
 	if next.VNCViewer != VNCExternal {
 		next.VNCViewer = VNCBuiltin
 	}
-	next.GitRemote = strings.TrimSpace(next.GitRemote)
-	next.GitUsername = strings.TrimSpace(next.GitUsername)
 	if next.VaultAutoLockMinutes < 0 {
 		next.VaultAutoLockMinutes = 0
 	}

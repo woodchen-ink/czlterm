@@ -13,20 +13,13 @@ import (
 
 // Store 读写 `<data>/connections/*.json`。
 //
-// 不做内存缓存: 同步 (git pull) 会在进程外改文件, 每次读盘最简单也不会读到旧数据;
+// 不做内存缓存: 每次读盘最简单也不会读到旧数据 (用户也可能手工改文件);
 // 个人规模下几百个小文件的读取耗时可以忽略。
 type Store struct {
 	dir string
 	mu  sync.Mutex
-	// writeMu 串行化写入与 git 同步: rebase 进行中写入的文件会被 rebase --abort 一起回滚掉。
+	// writeMu 串行化写入: Delete 先查跳板引用再删, 两步之间不能插进别的写入。
 	writeMu sync.Mutex
-}
-
-// Exclusive 在没有写入进行时执行 fn, 期间的 Save / Delete 等待。读不受影响。
-func (s *Store) Exclusive(fn func() error) error {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-	return fn()
 }
 
 // Open 打开数据目录下的连接存储。
@@ -123,22 +116,73 @@ func (s *Store) Save(c Connection) (Connection, error) {
 		}
 	}
 
+	return c, s.write(c)
+}
+
+// write 落盘一条连接, 调用方持有 mu。先写临时文件再改名, 写到一半崩溃不会留下半截 JSON。
+func (s *Store) write(c Connection) error {
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
-		return c, fmt.Errorf("2015 encode connection: %w", err)
+		return fmt.Errorf("2015 encode connection: %w", err)
 	}
 	data = append(data, '\n')
-	// 先写临时文件再改名, 写到一半崩溃不会留下半截 JSON。
 	path := s.path(c.ID)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return c, fmt.Errorf("2016 write connection: %w", err)
+		return fmt.Errorf("2016 write connection: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		os.Remove(tmp)
-		return c, fmt.Errorf("2016 write connection: %w", err)
+		return fmt.Errorf("2016 write connection: %w", err)
 	}
-	return c, nil
+	return nil
+}
+
+// Put 写入从别处来的连接 (云同步拉取、空间之间搬移): 照常校验字段 (内容可能来自团队里的其他人,
+// 不能让 - 开头的主机名之类混进来), 但保留原 UpdatedAt, 也不查跳板链 (跳板机可能稍后才到,
+// 启动时按 MaxJumpDepth 兜底)。
+func (s *Store) Put(c Connection) error {
+	if !ValidID(c.ID) {
+		return fmt.Errorf("2014 invalid connection id")
+	}
+	updated := c.UpdatedAt
+	if err := c.Normalize(); err != nil {
+		return err
+	}
+	if updated != "" {
+		c.UpdatedAt = updated
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.write(c)
+}
+
+// Remove 删除连接文件, 不查跳板引用 (云同步落地别处的删除)。不存在视为成功。
+func (s *Store) Remove(id string) error {
+	if !ValidID(id) {
+		return fmt.Errorf("2014 invalid connection id")
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := os.Remove(s.path(id)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("2018 delete connection: %w", err)
+	}
+	return nil
+}
+
+// UsedAsJump 返回把 id 当跳板机的连接名, 没有返回空串。
+func (s *Store) UsedAsJump(id string) string {
+	list, _ := s.List()
+	for _, c := range list {
+		if c.Jump == id {
+			return c.Name
+		}
+	}
+	return ""
 }
 
 // Delete 删除连接。仍被其他连接当作跳板机时拒绝删除。
@@ -148,11 +192,8 @@ func (s *Store) Delete(id string) error {
 	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	list, _ := s.List()
-	for _, c := range list {
-		if c.Jump == id {
-			return fmt.Errorf("2017 connection is used as jump host by %q", c.Name)
-		}
+	if name := s.UsedAsJump(id); name != "" {
+		return fmt.Errorf("2017 connection is used as jump host by %q", name)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

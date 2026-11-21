@@ -7,40 +7,48 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeftIcon,
   BotIcon,
+  CloudIcon,
   CopyIcon,
-  FolderOpenIcon,
-  GitBranchIcon,
   InfoIcon,
+  KeySquareIcon,
   LanguagesIcon,
   KeyRoundIcon,
   Loader2Icon,
   RefreshCwIcon,
   SquareTerminalIcon,
+  UsersIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AboutPanel } from "@/components/about-panel";
+import { AccountPanel } from "@/components/cloud/account-panel";
+import { TeamPanel } from "@/components/cloud/team-panel";
+import { CredentialsPanel } from "@/components/credentials-panel";
 import { useVault } from "@/components/vault-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { api, openExternal, type MCPConfig, type Settings, type SettingsView } from "@/lib/api";
 import { errorText } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
-export type SettingsTab = "general" | "apps" | "vault" | "sync" | "mcp" | "about";
+export type SettingsTab = "general" | "account" | "teams" | "credentials" | "apps" | "vault" | "mcp" | "about";
 
 const sections: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "general", label: "通用", icon: LanguagesIcon },
+  { id: "account", label: "账号与同步", icon: CloudIcon },
+  { id: "teams", label: "团队", icon: UsersIcon },
+  { id: "credentials", label: "凭据", icon: KeySquareIcon },
   { id: "apps", label: "外部程序", icon: SquareTerminalIcon },
   { id: "vault", label: "保险库", icon: KeyRoundIcon },
-  { id: "sync", label: "同步", icon: GitBranchIcon },
   { id: "mcp", label: "MCP", icon: BotIcon },
   { id: "about", label: "关于", icon: InfoIcon },
 ];
+
+/** 这些分区自己处理保存 (即时生效), 底部不显示保存条。 */
+const selfSaving: SettingsTab[] = ["general", "account", "teams", "credentials", "about"];
 
 /** 整页设置: 左侧分区导航, 右侧内容独立滚动, 底部保存条固定。 */
 export function SettingsPage({
@@ -50,15 +58,12 @@ export function SettingsPage({
 }: {
   initialTab?: SettingsTab;
   onClose: () => void;
-  /** syncing 为 true 表示改了同步仓库或认证, 后端已安排一次同步。 */
-  onSaved: (syncing: boolean) => void;
+  onSaved: () => void;
 }) {
   const language = useLanguage();
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [view, setView] = useState<SettingsView | null>(null);
   const [form, setForm] = useState<Settings | null>(null);
-  const [gitSecret, setGitSecret] = useState("");
-  const [clearGitSecret, setClearGitSecret] = useState(false);
   const [mcp, setMcp] = useState<MCPConfig | null>(null);
   const [busy, setBusy] = useState(false);
   // 自启状态读自系统登记, 切换即生效, 不随底部保存提交。
@@ -85,16 +90,9 @@ export function SettingsPage({
     setBusy(true);
     try {
       await api.SaveSettings(form);
-      const secretChanged = !!gitSecret.trim() || clearGitSecret;
-      if (secretChanged) await api.SetGitSecret(clearGitSecret ? "" : gitSecret);
       setMcp(await api.GetMCPConfig());
-      // 与后端 SaveSettings / SetGitSecret 的触发条件一致: 填了仓库地址且仓库、用户名或密钥有变化。
-      const prev = view?.settings;
-      const syncing =
-        !!form.gitRemote &&
-        (form.gitRemote !== prev?.gitRemote || form.gitUsername !== prev?.gitUsername || secretChanged);
-      toast.success(syncing ? t("设置已保存, 正在同步仓库…") : t("设置已保存"));
-      onSaved(syncing);
+      toast.success(t("设置已保存"));
+      onSaved();
       onClose();
     } catch (e) {
       toast.error(errorText(e));
@@ -128,7 +126,7 @@ export function SettingsPage({
               onClick={() => setTab(s.id)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
-                tab === s.id ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/60",
+                tab === s.id ? "bg-brand-soft text-brand-strong font-medium" : "hover:bg-sidebar-accent/60",
               )}
             >
               <s.icon className="size-4" />
@@ -165,6 +163,18 @@ export function SettingsPage({
                   }
                 />
               )}
+            </div>
+          ) : tab === "account" ? (
+            <div className="mx-auto max-w-2xl p-6">
+              <AccountPanel onOpenTeams={() => setTab("teams")} />
+            </div>
+          ) : tab === "teams" ? (
+            <div className="mx-auto max-w-2xl p-6">
+              <TeamPanel onOpenAccount={() => setTab("account")} />
+            </div>
+          ) : tab === "credentials" ? (
+            <div className="mx-auto max-w-2xl p-6">
+              <CredentialsPanel />
             </div>
           ) : !view || !form ? (
             <div className="text-muted-foreground flex h-full items-center justify-center">
@@ -311,43 +321,6 @@ export function SettingsPage({
                 </>
               )}
 
-              {tab === "sync" && (
-                <>
-                  <p className="text-muted-foreground text-sm">
-                    {t("连接配置 (不含任何密码) 存放在数据目录, 一连接一个 JSON 文件, 用 git 同步到你自己的私有仓库。")}
-                    </p>
-                  <Field label={t("仓库地址")} hint={t("如 git@github.com:you/czlterm-data.git 或 https://…; 留空则只做本地提交")}>
-                    <Input value={form.gitRemote} onChange={(e) => set("gitRemote", e.target.value)} />
-                  </Field>
-                  <Field label={t("用户名 (可选)")} hint={t("HTTPS 仓库使用; SSH 仓库的用户名写在地址里。留空用 git 默认认证")}>
-                    <Input value={form.gitUsername} autoComplete="off" onChange={(e) => set("gitUsername", e.target.value)} />
-                  </Field>
-                  <Field
-                    label={t("密钥 (可选)")}
-                    hint={t("HTTPS 仓库填访问令牌或密码, SSH 仓库粘贴私钥。保存在系统钥匙串, 不写入设置文件; 留空用 git 默认认证")}
-                  >
-                    <Textarea
-                      rows={3}
-                      className="font-mono text-xs"
-                      autoComplete="off"
-                      spellCheck={false}
-                      value={gitSecret}
-                      disabled={clearGitSecret}
-                      placeholder={view.hasGitSecret ? t("已保存 (留空保持不变)") : t("未设置")}
-                      onChange={(e) => setGitSecret(e.target.value)}
-                    />
-                    {view.hasGitSecret && (
-                      <label className="text-muted-foreground flex items-center gap-2 text-xs">
-                        <Switch checked={clearGitSecret} onCheckedChange={setClearGitSecret} /> {t("清除已保存的密钥")}</label>
-                    )}
-                  </Field>
-                  <ToggleRow label={t("修改后自动同步")} checked={form.gitAutoSync} onChange={(v) => set("gitAutoSync", v)} />
-                  <Button variant="outline" size="sm" onClick={() => api.RevealDataDir().catch((e) => toast.error(errorText(e)))}>
-                    <FolderOpenIcon /> {t("打开数据目录")}
-                    </Button>
-                </>
-              )}
-
               {tab === "mcp" && (
                 <>
                   <ToggleRow label={t("启用 MCP")} hint={t("在 127.0.0.1 上提供 MCP 端点, 以令牌鉴权; 只开这一项时 AI 只能列出连接")} checked={form.mcpEnabled} onChange={(v) => set("mcpEnabled", v)} />
@@ -408,7 +381,7 @@ export function SettingsPage({
         </div>
       </div>
 
-      {tab !== "about" && tab !== "general" && (
+      {!selfSaving.includes(tab) && (
         <div className="flex shrink-0 justify-end gap-2 border-t px-4 py-2">
           <Button variant="outline" onClick={onClose}>
             {t("取消")}

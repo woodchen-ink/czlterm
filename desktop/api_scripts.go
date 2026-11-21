@@ -7,8 +7,10 @@ import (
 	"github.com/woodchen-ink/czlterm/desktop/internal/script"
 )
 
-// ScriptList 是脚本列表。Warnings 报告读不出来的脚本文件。
+// ScriptList 是当前空间的脚本列表。Warnings 报告读不出来的脚本文件。
 type ScriptList struct {
+	Space    string          `json:"space"`
+	ReadOnly bool            `json:"readOnly"`
 	Items    []script.Script `json:"items"`
 	Groups   []string        `json:"groups"`
 	Warnings []string        `json:"warnings"`
@@ -19,8 +21,9 @@ func (a *App) ListScripts() (ScriptList, error) {
 	if err := a.ready(); err != nil {
 		return ScriptList{}, err
 	}
-	list, errs := a.scripts.List()
-	out := ScriptList{Items: list, Groups: []string{}, Warnings: []string{}}
+	sp := a.currentSpace()
+	list, errs := sp.Scripts.List()
+	out := ScriptList{Space: sp.Key, ReadOnly: sp.ReadOnly(), Items: list, Groups: []string{}, Warnings: []string{}}
 	seen := map[string]bool{}
 	for _, s := range list {
 		if s.Group != "" && !seen[s.Group] {
@@ -34,22 +37,18 @@ func (a *App) ListScripts() (ScriptList, error) {
 	return out, nil
 }
 
-// SaveScript 新建或更新脚本, 返回保存后的脚本。
+// SaveScript 新建或更新脚本, 返回保存后的脚本。已有脚本存回它所在的空间, 新建的进当前空间。
 func (a *App) SaveScript(s script.Script) (script.Script, error) {
 	if err := a.ready(); err != nil {
 		return s, err
 	}
-	// 与连接共用数据目录的写锁: git 同步 rebase 期间写入的文件会被 rebase --abort 回滚。
-	var saved script.Script
-	err := a.conns.Exclusive(func() (err error) {
-		saved, err = a.scripts.Save(s)
-		return err
-	})
-	if err != nil {
-		return s, err
+	sp := a.currentSpace()
+	if s.ID != "" {
+		if _, owner, err := a.spaces.FindScript(a.currentSpace().Key, s.ID); err == nil {
+			sp = owner
+		}
 	}
-	a.scheduleAutoSync()
-	return saved, nil
+	return sp.SaveScript(s)
 }
 
 // DeleteScript 删除脚本。
@@ -57,11 +56,11 @@ func (a *App) DeleteScript(id string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	if err := a.conns.Exclusive(func() error { return a.scripts.Delete(id) }); err != nil {
+	_, sp, err := a.spaces.FindScript(a.currentSpace().Key, id)
+	if err != nil {
 		return err
 	}
-	a.scheduleAutoSync()
-	return nil
+	return sp.DeleteScript(id)
 }
 
 // RunScript 在内置终端或系统终端里连接 SSH 服务器并执行脚本, 执行完留在交互式 shell 里。
@@ -70,7 +69,7 @@ func (a *App) RunScript(connID, scriptID string) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	c, err := a.conns.Get(connID)
+	c, sp, err := a.findConn(connID)
 	if err != nil {
 		return "", err
 	}
@@ -81,7 +80,7 @@ func (a *App) RunScript(connID, scriptID string) (string, error) {
 	if a.facts.Get(c.ID).OSID == "windows" {
 		return "", errors.New("4051 scripts are not supported on windows hosts")
 	}
-	s, err := a.scripts.Get(scriptID)
+	s, _, err := a.spaces.FindScript(a.currentSpace().Key, scriptID)
 	if err != nil {
 		return "", err
 	}
@@ -89,7 +88,7 @@ func (a *App) RunScript(connID, scriptID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	hops, err := a.resolveChain(c)
+	hops, err := a.resolveChain(sp, c)
 	if err != nil {
 		return "", err
 	}
