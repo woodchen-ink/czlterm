@@ -7,13 +7,17 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangleIcon,
   CheckIcon,
+  ChevronDownIcon,
   CloudIcon,
+  ExternalLinkIcon,
   FingerprintIcon,
   HardDriveIcon,
   KeyRoundIcon,
   LaptopIcon,
   Loader2Icon,
+  MinusIcon,
   PackageIcon,
+  PlusIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
   TrashIcon,
@@ -26,6 +30,7 @@ import { UnlockCancelled, useVault } from "@/components/vault-provider";
 import { vaultNote } from "@/lib/vault-note";
 import { spaceLabel, useCloud } from "@/components/cloud/cloud-provider";
 import { ApproveDeviceDialog, RecoveryCodeDialog, UnlockDialog } from "@/components/cloud/key-dialogs";
+import { AddOnQuantityDialog, nextQuantity } from "@/components/cloud/addon-quantity-dialog";
 import { AddOnDialog, addOnUnit, planStorage, PlansDialog } from "@/components/cloud/plans-dialog";
 import { Loading, Notice, roleLabel, Section, spaceStatus, StatusDot } from "@/components/cloud/shared";
 import {
@@ -40,13 +45,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { api, type DeviceRequest, type Entitlement, type Plan, type SpaceView } from "@/lib/api";
+import { api, openExternal, type DeviceRequest, type Entitlement, type Plan, type SpaceView } from "@/lib/api";
 import { errorText } from "@/lib/errors";
 import { formatBytes, formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Buy = { subject: string; title: string; plans: Plan[]; current?: string; initial?: string };
 type Confirm = { title: string; body: string; action: string; danger?: boolean; run: () => Promise<void> };
+
+/** Connect 的「订阅与付款」页: 查看订单、开关自动续费、申请退款。 */
+const MANAGE_URL = "https://connect.czl.net/profile/subscriptions";
 
 const activePlan = (p: Plan) => !p.status || p.status === "active";
 
@@ -66,6 +74,7 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [buy, setBuy] = useState<Buy | null>(null);
   const [addOn, setAddOn] = useState<{ subject: string; title: string } | null>(null);
+  const [reduce, setReduce] = useState<{ subject: string; title: string; ent?: Entitlement; members?: number } | null>(null);
 
   const keyStatus = cloud?.keyStatus ?? "unknown";
   const unlocked = keyStatus === "unlocked";
@@ -246,7 +255,15 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
 
       {/* 订阅 */}
       {billing?.enabled && (
-        <Section icon={CloudIcon} title={t("我的订阅")}>
+        <Section
+          icon={CloudIcon}
+          title={t("我的订阅")}
+          action={
+            <Button size="xs" variant="ghost" onClick={() => openExternal(MANAGE_URL)}>
+              <ExternalLinkIcon /> {t("订单与自动续费")}
+            </Button>
+          }
+        >
           <div className="divide-y rounded-lg border">
             <SubscriptionRow
               icon={LaptopIcon}
@@ -256,6 +273,7 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
               canManage={userPlans.length > 0}
               onBuy={() => buyPersonal()}
               onAddOn={() => setAddOn({ subject: "user", title: t("个人空间加购") })}
+              onReduce={() => setReduce({ subject: "user", title: t("个人空间加购的下期份数"), ent })}
             />
             {orgs.map((o) => (
               <SubscriptionRow
@@ -269,6 +287,9 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
                 canManage={(o.role === "owner" || o.role === "admin") && orgPlans.length > 0}
                 onBuy={() => buyOrg(o.orgId)}
                 onAddOn={() => setAddOn({ subject: `org:${o.orgId}`, title: t("「{0}」加购", o.name) })}
+                onReduce={() =>
+                  setReduce({ subject: `org:${o.orgId}`, title: t("「{0}」加购的下期份数", o.name), ent: o.entitlement, members: o.memberCount })
+                }
               />
             ))}
             {orgs.length === 0 && (
@@ -424,6 +445,14 @@ export function SyncPanel({ onOpenTeams }: { onOpenTeams: () => void }) {
         subject={addOn?.subject ?? "user"}
         title={addOn?.title ?? ""}
       />
+      <AddOnQuantityDialog
+        open={!!reduce}
+        onOpenChange={(o) => !o && setReduce(null)}
+        subject={reduce?.subject ?? "user"}
+        title={reduce?.title ?? ""}
+        ent={reduce?.ent}
+        members={reduce?.members}
+      />
       <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -496,6 +525,7 @@ function SubscriptionRow({
   canManage,
   onBuy,
   onAddOn,
+  onReduce,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   name: string;
@@ -506,9 +536,18 @@ function SubscriptionRow({
   canManage: boolean;
   onBuy: () => void;
   onAddOn: () => void;
+  onReduce: () => void;
 }) {
   useLanguage();
   const active = !!ent?.active;
+  const addons = active ? (ent!.addons ?? []).filter((a) => a.quantity > 0) : [];
+  // 加购明细: 「10 GB 存储 × 2 (下期 1)」; seats / quotas 已是合计, 这里只说明来源与下期变化
+  const addonText = addons
+    .map((a) => {
+      const n = nextQuantity(a);
+      return `${addOnUnit(a)} × ${a.quantity}${n !== a.quantity ? ` (${n > 0 ? t("下期 {0}", n) : t("下期不再续")})` : ""}`;
+    })
+    .join(t("、"));
   const gb = planStorage(ent?.quotas);
   const detail = active
     ? [
@@ -535,14 +574,32 @@ function SubscriptionRow({
           {!active && <StatusDot tone="warn" />}
           <span className="truncate">{detail}</span>
         </p>
+        {addonText && <p className="text-muted-foreground truncate text-xs">{t("含加购 {0}", addonText)}</p>}
       </div>
       {canManage ? (
         <div className="flex shrink-0 gap-1">
-          {active && (
-            <Button size="xs" variant="ghost" onClick={onAddOn}>
-              {t("加购")}
-            </Button>
-          )}
+          {active &&
+            (addons.length === 0 ? (
+              <Button size="xs" variant="ghost" onClick={onAddOn}>
+                {t("加购")}
+              </Button>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="xs" variant="ghost">
+                    {t("加购")} <ChevronDownIcon />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={onAddOn}>
+                    <PlusIcon /> {t("继续加购")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onReduce}>
+                    <MinusIcon /> {t("调低下期份数")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ))}
           <Button size="xs" variant={active ? "outline" : "default"} onClick={onBuy}>
             {active ? t("续费或升级") : t("开通")}
           </Button>
