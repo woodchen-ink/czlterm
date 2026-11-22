@@ -113,7 +113,7 @@ export function ConnectionDetail({
           </Row>
           <Row label={t("主机")}>{c.host}</Row>
           <Row label={t("端口")}>{c.port}</Row>
-          <Row label={t("用户名")}>{c.username || <Muted>{c.auth === "vault" ? t("取自保险库条目") : t("系统默认")}</Muted>}</Row>
+          <Row label={t("用户名")}>{c.username || <Muted>{c.auth === "vault" ? t("取自保险库条目") : c.auth === "stored" ? t("取自保存的凭据") : t("系统默认")}</Muted>}</Row>
           <Row label={t("分组")}>{c.group || <Muted>{t("未分组")}</Muted>}</Row>
           <Row label={t("凭据")}>
             {c.auth === "vault" ? (
@@ -121,6 +121,11 @@ export function ConnectionDetail({
                 {c.vaultItem && <span className="block">{t("密码:")}{c.vaultItemName || <Muted>{t("保险库锁定中")}</Muted>}</span>}
                 {c.keyItem && <span className="block">{t("私钥:")}{c.keyItemName || <Muted>{t("保险库锁定中")}</Muted>}</span>}
                 {!c.vaultItem && !c.keyItem && <Muted>{t("Vaultwarden (未选条目)")}</Muted>}
+              </span>
+            ) : c.auth === "stored" ? (
+              <span>
+                {t("保存的凭据:")}
+                {c.credential ? c.credentialName || <Muted>{t("已删除")}</Muted> : <Muted>{t("未选择")}</Muted>}
               </span>
             ) : (
               <Muted>{isSSH ? t("系统默认 (~/.ssh、系统 agent)") : t("连接时手动输入")}</Muted>

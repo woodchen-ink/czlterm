@@ -59,6 +59,8 @@ export const english: Record<string, string> = {
   "已删除": "Deleted",
   "未分组": "Ungrouped",
   "取自保险库条目": "From vault item",
+  "取自保存的凭据": "From saved credential",
+  "保存的凭据:": "Saved credential: ",
   "系统默认": "System default",
   "保险库锁定中": "Vault locked",
   "Vaultwarden (未选条目)": "Vaultwarden (no item selected)",

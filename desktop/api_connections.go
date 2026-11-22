@@ -18,6 +18,8 @@ type ConnectionView struct {
 	// VaultItemName / KeyItemName 是所引用条目的名称; 保险库锁定或条目已删除时为空。
 	VaultItemName string `json:"vaultItemName"`
 	KeyItemName   string `json:"keyItemName"`
+	// CredentialName 是所引用保存的凭据的名称 (auth=stored); 凭据已删除或读不出时为空。
+	CredentialName string `json:"credentialName"`
 	// OSID / OSName 来自最近一次采集的机器信息, 列表据此显示系统图标; 从未采集时为空。
 	OSID   string `json:"osId"`
 	OSName string `json:"osName"`
@@ -51,10 +53,21 @@ func (a *App) ListConnections() (ConnectionList, error) {
 	seen := map[string]bool{}
 	geoOn := a.settings.Get().GeoLookup
 	hosts := make([]string, 0, len(list))
+	var credNames map[string]string // 有连接引用保存的凭据时才读一次摘要
 	for _, c := range list {
 		v := ConnectionView{Connection: c, JumpName: names[c.Jump]}
 		v.VaultItemName = a.itemName(c.VaultItem)
 		v.KeyItemName = a.itemName(c.KeyItem)
+		if c.Auth == "stored" && c.Credential != "" {
+			if credNames == nil {
+				credNames = map[string]string{}
+				sums, _ := sp.Creds.List()
+				for _, s := range sums {
+					credNames[s.ID] = s.Name
+				}
+			}
+			v.CredentialName = credNames[c.Credential]
+		}
 		f := a.facts.Get(c.ID)
 		v.OSID, v.OSName = f.OSID, f.OSName
 		if v.OSID == "" && f.OSLike != "" {
