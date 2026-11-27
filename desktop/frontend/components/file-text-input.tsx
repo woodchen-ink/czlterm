@@ -106,7 +106,7 @@ export function FileTextInput({
           spellCheck={false}
           autoComplete="off"
           placeholder={placeholder}
-          className={cn("font-mono text-xs transition-colors", dragging && "border-primary bg-primary/5 ring-primary/30 ring-2")}
+          className={cn("czl-scroll max-h-48 font-mono text-xs wrap-anywhere transition-colors", dragging && "border-primary bg-primary/5 ring-primary/30 ring-2")}
           onChange={(e) => {
             setFileName("");
             onChange(e.target.value);
