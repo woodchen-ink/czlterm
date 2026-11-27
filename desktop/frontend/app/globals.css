@@ -153,6 +153,22 @@
   html {
     @apply font-sans;
   }
+
+  /* 客户端里默认不可选, 内容区可选; 网页端 (无 data-app-shell) 保持浏览器默认。
+     WKWebView 只认 -webkit- 前缀; 输入框必须显式恢复, 否则跟着祖先变成无法输入。
+     组件上的 select-text / select-none 工具类层级更高, 可覆盖这里; 新增内容区挂 data-selectable。 */
+  html[data-app-shell] body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  html[data-app-shell] :is(main, [role="dialog"], [role="alertdialog"], [data-selectable], pre, code, input, textarea, [contenteditable]:not([contenteditable="false"])) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  html[data-app-shell] :is(main, [role="dialog"], [role="alertdialog"], [data-selectable]) :is(nav, button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], [role="checkbox"], [role="radio"], [data-slot="badge"]) {
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 /* 原生细滚动条。颜色取边框 token，悬停时加深，两个主题自动跟随。 */
 @layer components {

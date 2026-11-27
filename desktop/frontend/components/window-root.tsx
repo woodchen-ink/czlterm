@@ -1,10 +1,11 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { VNCWindowPage } from "@/components/vnc-window";
 import { isVNCWindow } from "@/lib/api";
+import { installSelectAllGuard } from "@/lib/selection";
 
 const noop = () => () => {};
 
@@ -18,6 +19,7 @@ export function WindowRoot() {
     () => (isVNCWindow() ? "vnc" : "main"),
     () => null,
   );
+  useEffect(() => installSelectAllGuard(), []);
   if (mode === null) return null;
   return mode === "vnc" ? <VNCWindowPage /> : <AppShell />;
 }

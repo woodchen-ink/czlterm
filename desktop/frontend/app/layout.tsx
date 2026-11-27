@@ -12,7 +12,8 @@ export const metadata: Metadata = {
 };
 
 // 赶在首帧前跟随系统深浅色并标记 macOS, 避免闪白与红绿灯压住内容。
-const bootScript = `(function(){var d=document.documentElement;var m=window.matchMedia("(prefers-color-scheme: dark)");function a(){d.classList.toggle("dark",m.matches);d.style.colorScheme=m.matches?"dark":"light"}a();m.addEventListener("change",a);if(/Mac/.test(navigator.platform))d.classList.add("mac")})()`;
+// Wails 把 ipc.js 插在 head 最前面, 这里已能看到 WailsInvoke: 有它就是客户端, 打上 data-app-shell 收紧文字选择。
+const bootScript = `(function(){var d=document.documentElement;var m=window.matchMedia("(prefers-color-scheme: dark)");function a(){d.classList.toggle("dark",m.matches);d.style.colorScheme=m.matches?"dark":"light"}a();m.addEventListener("change",a);if(/Mac/.test(navigator.platform))d.classList.add("mac");if(window.WailsInvoke)d.setAttribute("data-app-shell","")})()`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
