@@ -33,6 +33,8 @@ ManifestDPIAware true
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
+# 手动安装时完成页默认勾选「运行」; 静默安装 (程序内在线更新) 在安装段末尾直接启动。
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}"
 !insertmacro MUI_PAGE_FINISH
 
 # 卸载时提供一个默认不勾选的「同时删除连接配置与设置」选项。
@@ -68,6 +70,10 @@ Section
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
     !insertmacro wails.writeUninstaller
+
+    # 在线更新以 /S 运行本安装程序后旧版本已退出, 装完由这里重新打开 (见 api_update.go InstallUpdate)。
+    IfSilent 0 +2
+        Exec '"$INSTDIR\${PRODUCT_EXECUTABLE}"'
 SectionEnd
 
 # 程序文件与用户数据同在安装目录下: 默认只删程序、缓存与日志, 保留 config\ 与 data\。

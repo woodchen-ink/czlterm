@@ -94,7 +94,8 @@ func (a *App) CheckForUpdate() (UpdateInfo, error) {
 }
 
 // InstallUpdate 下载并校验最新安装包, 安装后退出并重新打开。
-// Windows 静默运行 NSIS 安装程序; macOS 解压 .app 的 zip 包原地替换。
+// Windows 静默运行 NSIS 安装程序, 由安装程序装完后重新打开 (project.nsi 的 IfSilent);
+// macOS 解压 .app 的 zip 包原地替换, 由替换脚本重新打开。
 func (a *App) InstallUpdate() error {
 	if !a.updates.installing.TryLock() {
 		return errors.New("9002 an update is already in progress")
